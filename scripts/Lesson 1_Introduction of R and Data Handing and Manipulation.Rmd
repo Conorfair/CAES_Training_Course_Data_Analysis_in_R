@@ -1,0 +1,313 @@
+---
+title: "Introduction of R and Data Handing/Manipulation"
+author: "Xuelin (Lin) Luo^[Statistical consultant, xuelin@uga.edu]"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+chunk_output_type: console
+---
+
+```{r setup, include=FALSE,fig.width = 6, fig.height = 4}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE) # set global options
+```
+
+### **I. Introduction to R Software**
+
+R was developed in the mid-1990s by Ross Ihaka and Robert Gentleman at the University of Auckland, New Zealand. It is a free and open-source programming language and software environment that is used for statistical computing, data analysis, and graphical representation.  
+It also has a large and active community of users and developers who contribute to its development, documentation, and support. Its popularity is partly due to the wide range of packages that are available, which allow users to extend its functionality in a variety of ways. It can be used on a variety of platforms, including Windows, Mac, and Linux. Here we only use Windows platform.   
+
+#### **Features of R**
+
+1. **Cost:** R is an open source software that is available for free download and use. Consequentially, file sharing and collaboration are easier with R, as every one has free access to R.
+2. **Flexibility:** R is highly flexible and has a large number of packages available, each of which adds specific functionality to the software.
+3. **Updates:** R is continuously updated. It allows users to submit their own packages, so the latest technologies are often released in R first.  
+4. **Reproducibility:** R can be integrated with R markdown for combining code, output, and narrative; Its version control support(Git, GitHub) enables the results been reproduced. 
+5. **Active community & support:** R has the biggest online communities but no customer service support. 
+
+### **II. Installing and Setting up R and related software**
+
+**R** -R itself is a relatively small application. Go to the R Project website <https://www.r-project.org/> and click on “*CRAN*” under the “*Download and Install*” section. Then select the appropriate download for your operation system (Windows, Mac, or Linux) from a CRAN mirror and follow the prompts to install R on your computer.   
+
+**RStudio** -To start using R, you can make your life easier by using an integrated development environment (IDE). One popular option is RStudio, which you can download for free from the RStudio website <https://posit.co/download/rstudio-desktop/>.  Jupyter Notebook is also a popular IDE for R, Python and many other programming languages.
+
+Install RStudio on your computer and open it. You'll be prompted to set up a new project. A project is a way to organize your work in R, and it keeps all your files and data in one place.  
+
+Once you've created a new project, you can start working in R. You can write code in the Console pane at the bottom of the RStudio window or create a new R script by clicking on "*File*" and selecting "*New File*" > "*R Script*". You can then write your code in the Script pane, save it, and run it by clicking on the "*Run*" button or pressing *Ctrl+Enter* (Windows) or *Command+Enter* (Mac).
+That's it! You now have R installed and set up on your computer and can start exploring the world of statistical analysis and data visualization.
+
+![RStudio interface](C:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 1-Introduction of R and Data Handing and Manipulation/RStudio interface.png)
+
+**RMarkdown** -a simple and easy to use plain text language used to combine your R code, results from your data analysis (including plots and tables) and written commentary into a single nicely formatted and reproducible document (like a report, publication, thesis chapter or a web page like this one).Install RMarkdown is just like installing a R package. This document was created using RMarkdown. You can find more details from [Markdown Guide](https://www.markdownguide.org/basic-syntax/) website.  
+
+**Git and GitHub** -Frequent updates bring another problem: version control. To reproduce analysis results, it is very important to keep records of all the changes of the data sets and package versions. Git and its web interface, GitHub are common version control tools for R program. Here are two resource about using Git or GitHub on RStudio for version control.
+
+1.	Version Control with RStudio (brief)
+     <https://towardsdatascience.com/version-control-with-rstudio-d20c54bd5b49>  
+2.	Happy Git and GitHub for the useR (more detailed)
+     <https://happygitwithr.com/>
+
+There are many other tools commonly used with R, but we don't need them so far. R also has enormous number of packages to make it super flexible and powerful. According to Wikipedia, as of November 2020, more than 16,000 packages are available. But don't be scared. Usually we just need to install the packages we need.
+
+![R tools](C:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 1-Introduction of R and Data Handing and Manipulation/R tools.png) 
+
+<https://www.mutazag.com/blog/using-r-markdown-and-ggplots-for-data-visualisation/>
+
+### **III.	Data Manipulation in R**
+
+From here we are starting working on RStudio. The following contents are R code and notes. They are very similar to the R file I sent to you through email, excepting more explanation using text. 
+
+#### **a. Preparatory work**
+
+**Preparatory work before analyzing data usually includes:**
+
+1.  Clean data in a CSV file, excel file, or txt file.   
+ *  Rules for R variables are:  
+    + A variable name must start with a letter and can be a combination of letters, digits, period(.)
+and underscore(_). If it starts with period(.), it cannot be followed by a digit.It is preferable in R to use '_' which helps to separate the different words for the identifier. Period '.' is usually used in hierarchical function names.
+    + A variable name cannot start with a number or underscore (_)
+    + Variable names are case-sensitive (trt, Trt and TRT are three different variables)
+    + Reserved words cannot be used as variables (TRUE, FALSE, NULL, if...)
+    + Special characters such as '#', '&', etc., along with White space (tabs, space) are not allowed in a variable name.
+
+ *  Record missing values as "NA".This is different from SAS which use "." for numeric variable, and blank for categorical variable to represent missing values.
+ 
+ ![Preparing data files](C:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 1-Introduction of R and Data Handing and Manipulation/best-practices-excel-file-highlighted.png){width=width=120%, height=width=120%}
+
+<http://www.sthda.com/english/wiki/importing-data-into-r>
+
+2.  Set working directory to where the R project or R script is saved.You can use the *setwd()* function or select *Session*->*Setting Working Directory*->*To Project Directory*. 
+```{r}
+setwd("~/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 1-Introduction of R and Data Handing and Manipulation")
+```
+
+3.  Clean environment to make sure there are no datasets left from last time using RStudio. 
+
+![Cleaning environment](C:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 1-Introduction of R and Data Handing and Manipulation/clean environment.png)
+
+4.  Load libraries/packages.
+
+Packages in R Programming language are a set of R functions, compiled code, and sample data. These are stored under a directory called “library” within the R environment. By default, R installs a group of packages during installation. Once we start the R console, only the default packages are available by default.
+
+```{r}
+#If you don't have these libraries, install first.  Some installed from CRAN, some installed from other places.
+# if (!require("remotes")) install.packages("remotes");
+# if (!require("drc")) remotes::install_github("DoseResponse/bmd")
+library(bmd)
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+```
+
+5.  Read data and check.
+```{r}
+#crop data is from a split-plot design at multiple location
+crop <- read.csv("crop.csv") #Don't use "." to represent missing numeric data 
+#crop <- read.csv("crop.csv",colClasses=c(fertilizer="character"))
+crop <- read.csv("crop.csv",colClasses=c(rep("factor",4), "numeric","numeric"))
+view(crop)
+library(readxl)
+crop2 <- read_excel("crop.xlsx", sheet="crop")
+crop2 <- read_excel("crop.xlsx", col_types = c(rep("text",4), "numeric","numeric"))
+View(crop2)
+
+#Check data structure
+str(crop)
+str(crop2)
+class(crop)
+
+head(crop) # view the first few rows, default are 6 rows
+tail(crop) # view the last few rows, default are 6 rows
+```
+
+Notice that 'fertilizer' is imported as integer, which technically is correct, but should be used as a categorical variable. 
+```{r}
+#Change 'fertilizer', 'location' and 'block' to factors
+crop$fertilizer<-as.factor(crop$fertilizer)
+crop$location<-as.factor(crop$location)
+##crop$block<-as.factor(crop$block)
+```
+
+* **Basic data type**: **numeric**,  **character** and **logical**
+```{r}
+block <- 1 # Numeric variable
+density <- "High" # Character variable
+is_highyield <- TRUE # logical variable
+class(block)
+class(is_highyield)
+
+
+```
+
+* **Vectors**: a combination of multiple values (numeric, character or logical). Vector can only be of a single type.
+```{r}
+# Creat a vector
+yield <- c(100, 129, 305, 281)
+variety <- c("v1", "v2", "v3", "v4")
+```
+
+* **Matrices**: like an Excel sheet containing multiple rows and columns. Combination of multiple vectors with the same types (numeric, character or logical).
+* **Factors**: char variables with limited levels.
+* **Data frames**:  like a matrix but can have columns with different types.
+* **Lists**: collection of objects, which can be vectors, matrices, data frames.
+
+
+#### **b. Request frequencies for factors**
+
+```{r}
+#How many obs of each fertilizer?
+table(crop$fertilizer)
+#Tidyverse alternative
+count(crop,fertilizer)
+#Tidyverse piped alternative
+crop %>% 
+  count(fertilizer)
+```
+Notice that *count()* includes all observations even missing values.
+```{r}
+#Exclude rows that have missing data in ANY variable
+crop_no_NA <- crop %>% 
+  drop_na()
+count(crop_no_NA,fertilizer)
+```
+
+How many obs of each fertilizer with each density?
+```{r}
+table(crop$fertilizer,crop$density)
+table(crop_no_NA$fertilizer,crop_no_NA$density)
+```
+
+####  **c. Summary statistics**
+
+Get overall summary fast
+```{r}
+summary(crop)
+#Note NA's. How 'location' and 'fertilizer' are handled comparing to 'block'
+```
+
+Simple summary stats functions
+```{r}
+mean(crop$yield_ms) #why error? R doesn’t make assumptions about how you want to handle missing data, so if we pass this vector to a                      #numeric function like mean(), it won’t know what to do, so it returns NA
+mean(crop$yield_ms,na.rm=T)
+sd(crop$yield_ms,na.rm=T)
+quantile(crop$yield_ms,na.rm=T)
+```
+
+Summarize by group
+```{r}
+#average yield of low density vs. high density
+aggregate(yield_ms~density,data=crop,FUN=mean)
+#break down further by fertilizer
+aggregate(yield_ms~density+fertilizer,data=crop,FUN=mean)
+#tidyverse alternative (group, then summarize)
+crop %>%
+  group_by(density,fertilizer) %>%
+  summarize(mean = mean(yield_ms,na.rm=T), sd = sd(yield_ms,na.rm=T),n = n())#mean and count, not satisfy with digits of mean and value of n
+crop %>%
+  group_by(density,fertilizer) %>%
+  summarize(mean = mean(yield_ms,na.rm=T), sd = sd(yield_ms,na.rm=T),n = sum(!is.na(yield_ms))) %>% 
+  as.data.frame() # add this to change the output digits
+```
+
+Export results
+```{r}
+crop_stat<-crop %>%
+  group_by(density,fertilizer) %>%
+  summarize(mean = mean(yield_ms,na.rm=T), sd = sd(yield_ms,na.rm=T),n = sum(!is.na(yield_ms))) %>% 
+  as.data.frame()
+write_csv(crop_stat, file = "crop_stat.csv")
+```
+
+
+#### **d. Data manipulation** <https://datacarpentry.org/R-ecology-lesson/working-with-data.html>
+
+#### **Importing data**
+```{r}
+surveys <- read_csv("surveys_complete_77_89.csv") # read.csv() is a base R function
+class(surveys)
+str(surveys)
+```
+####  **Manipulating data**
+The most common dplyr functions:
+
+* select(): subset columns
+* filter(): subset rows on conditions
+* mutate(): create new columns by using information from other columns
+* group_by() and summarize(): create summary statistics on grouped data
+* arrange(): sort results
+* count(): count discrete values
+
+**Selecting columns and filtering rows**
+```{r}
+select(surveys, plot_id, species_id, weight)
+select(surveys, -record_id, -species_id) #select all the variables in surveys except record_id and species_id
+filter(surveys, year == 1989)
+```
+
+**Pipes**:take the output of one function and send it directly to the next, which is useful when you need to do many things to the same dataset.
+```{r}
+surveys2 <- filter(surveys, weight < 5)
+surveys_sml <- select(surveys2, species_id, sex, weight)
+surveys_sml <- select(filter(surveys, weight < 5), species_id, sex, weight)
+surveys %>%
+  filter(weight < 5) %>%
+  select(species_id, sex, weight)
+#Creat a new data frame,
+surveys_sml <- surveys %>%
+  filter(weight < 5) %>%
+  select(species_id, sex, weight)
+
+surveys_sml
+```
+
+**Practice 1:**
+```{r}
+#Using pipes, subset the surveys data to include animals collected before 1985 and retain only the columns year, sex, and weight.
+surveys %>%
+    filter(year < 1985) %>%
+    select(year, sex, weight)
+```
+
+**Mutate**:create new columns based on the values in existing columns
+```{r}
+surveys %>%
+  mutate(weight_kg = weight / 1000,
+         weight_lb = weight_kg * 2.2) %>% 
+  head()
+surveys %>%
+  filter(!is.na(weight)) %>%
+  mutate(weight_kg = weight / 1000,
+         weight_lb = weight_kg * 2.2)
+
+surveys %>% 
+  mutate(date = paste(year, month, day, sep = "-"), date = as.Date(date))%>% 
+  relocate(date, .after = year)
+
+surveys_daily_counts <- surveys %>% 
+  mutate(date = ymd(paste(year, month, day, sep = "-"))) %>% 
+  group_by(date, sex) %>% 
+  summarize(n = n())
+surveys_daily_counts <- surveys %>% 
+  mutate(date = ymd(paste(year, month, day, sep = "-"))) %>% 
+  count(date, sex)
+```
+
+Practice 2:
+```{r}
+#Create a new data frame from the surveys data : contains only the species_id column and a new column called hindfoot_cm containing the hindfoot_length values (currently in mm) converted to centimeters. In this hindfoot_cm column, there are no NAs and all values are less than 3.
+surveys %>% 
+  filter(!is.na(hindfoot_length) & hindfoot_length<30) %>% 
+  mutate(hindfoot_cm = hindfoot_length/10) %>% 
+  select(species_id, hindfoot_cm)
+```
+
+
+
+
+### **V. Conclusion**
+
+In this workshop, we briefly introduced R software and its related tools, went through the common process of starting using R through RStudio: manipulate data, calculate summary statistics. There are many details that we are not able to cover in one workshop, and I believe you can find the details that you need by yourselves. My purpose of this workshop is just to provide a guidance to help you start with R programming. It is common to get error messages when programming, and Google search is the most efficient and convenient helper.  
+
+Let's start your R journey! 
+
+
+

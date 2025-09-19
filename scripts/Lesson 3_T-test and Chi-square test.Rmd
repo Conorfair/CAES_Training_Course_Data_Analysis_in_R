@@ -1,0 +1,326 @@
+---
+title: "T-test and Chi-square test in R"
+author: "Xuelin Luo^[Statistical consultant, xuelin@uga.edu]"
+date: "`r Sys.Date()`"
+output: html_document
+chunk_output_type: console
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE,fig.width = 6, fig.height = 4}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+setwd("~/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 3-T-test and Chi-square test")
+library(ggpubr)
+library(tidyverse)
+library(car) # leveneTest() in this package
+
+```
+
+
+### **T-test** 
+<https://www.jmp.com/en_us/statistics-knowledge-portal/t-test.html>
+
+The t-test is a statistical test that takes samples from both groups to determine if there is a significant difference between the means of the two groups.In this lesson, we will learn about the classification of t-tests (one-sample, two-samples, and paired sample t-test) with R code examples and learn to interpret the results. A simple R built-in function *t.test()* will be used. 
+
+When performing a t-test, you check if your test statistic is a more extreme value than expected from the t-distribution.
+
+For a two-tailed test, you look at both tails of the distribution. Figure below shows the decision process for a two-tailed test. The curve is a t-distribution with 21 degrees of freedom. The value from the t-distribution with α = 0.05/2 = 0.025 is 2.080. For a two-tailed test, you reject the null hypothesis if the test statistic is larger than the absolute value of the reference value. If the test statistic value is either in the lower tail or in the upper tail, you reject the null hypothesis. If the test statistic is within the two reference lines, then you fail to reject the null hypothesis.
+![two-tailed test](C:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 3-T-test and Chi-square test/two tailed test.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<https://www.jmp.com/en_us/statistics-knowledge-portal/t-test/t-distribution.html>
+
+#### **I. Assumptions of t-test**:
+
+While t-tests are relatively robust to deviations from assumptions, t-tests do assume that:
+
+1. The data are continuous.
+2. The sample data have been randomly sampled from a population.
+3. There is homogeneity of variance (i.e., the variability of the data in each group is similar). If the sample sizes in the two groups being compared are equal, t test is highly robust to the presence of unequal variances.
+4. The distribution is approximately normal.Under weak assumptions, this follows in large samples from the central limit theorem, even when the distribution of observations in each group is non-normal. A common rule of thumb is that for a sample size of at least 30, one can use the z-distribution in place of a t-distribution.
+ 
+ 
+#### **II. Syntax of t.test()**
+<https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/t.test>
+
+There are two ways of using the t.test function: default and formula methods.
+
+1. Default method
+
+*t.test(x, y=NULL, alternative = c("two.sided", "less", "greater"), mu = 0, paired = FALSE, var.equal = FALSE, conf.level = 0.95, ...)*
+
+2. Formula method
+
+*t.test(formula, data, subset, na.action, ...)*
+
+
+#### **III. Test classification:**
+
+1. **One-Sample T-Test**: Compare the mean score of a sample to a known value
+
+Test statistic for one sample
+$$
+\begin{align*}
+t= \frac{\bar{x}−\mu} {\hat{\sigma}/\sqrt{n}}\sim\text{t}(n-1)
+\end{align*}
+$$
+where $\bar{x}$ is the sample mean, *n* is the sample size, $\mu$ is the population mean, $\hat{\sigma}$ is the estimate of the standard deviation of the population. The null hypothesis (H0) is that the true difference between the sample mean and the assumed population mean $\mu$ is zero.
+
+**Example:** test if the mean of corn yield with high density is significantly different from the expected yield 180lb/plot.
+
+```{r}
+crop <- read.csv("crop.csv",colClasses=c(rep("factor",4),"numeric","numeric","numeric"))
+boxplot(yield~density, data=crop)
+Low<-subset(crop,density=="Low") # Subsetting rows and selecting columns on specific conditions
+High<-subset(crop,density=="High")
+hist(High$yield) # when sample size is greater than 30, don't need to check normality
+shapiro.test(High$yield)
+
+# test if the mean of corn yield with high density is significantly different from 180lb/plot.
+t.test(High$yield, alternative = "two.sided", mu = 180, paired = FALSE, var.equal = FALSE, conf.level = 0.95 )  #p=0.423, 95% CI: (177.88, 180.9)
+# test if the mean of corn yield with high density is significantly less than 180lb/plot.
+t.test(High$yield, alternative = "less", mu = 180, paired = FALSE, var.equal = FALSE, conf.level = 0.95 )  #p=0.211, 95% CI: (-inf, 180.65)
+# test if the mean of corn yield with high density is significantly greater than 180lb/plot.
+t.test(High$yield, alternative = "greater", mu = 180, paired = FALSE, var.equal = FALSE, conf.level = 0.95 )  #p=0.789, 95% CI: (178.13, inf)
+
+```
+2. **Independent (two sample) T-Test**: Compare the mean of one sample with the mean of another sample
+
+Test statistic for two independent samples (Welch)
+$$
+\begin{align*}
+t= \frac{\bar{x_1}−\bar{x_2}} {\sqrt{\frac{s^2_1}{n_1}+\frac{s^2_2}{n_2}}}
+\end{align*}
+$$
+Welch t-test doesn't require homogeneity of variance of two samples. By default, the t.test() function assumes that the variance of two samples is unequal (var.equal=FALSE). 
+
+Test statistic for two independent samples (Student) with equal variance
+$$
+\begin{align*}
+t= \frac{\bar{x_1}−\bar{x_2}} {s_p\sqrt{\frac{1}{n_1}+\frac{1}{n_2}}}
+\end{align*}
+$$
+To perform two sample t-test with equal variance, we need to set **var.equal=TRUE**.
+
+**Example:** test if the mean differences of corn yield between high density and low density is significantly different from zero.
+
+```{r}
+t.test(yield~density, data=crop) # unequal variances
+t.test(yield~density, data=crop, var.equal=TRUE)
+leveneTest(yield~density, data=crop) #less sensitive than the Bartlett test to departures from normality
+bartlett.test(yield~density, data=crop)# is more robust when dealing with normally distributed data
+
+```
+Both equal and unequal variances t-test show significant difference of corn yield between high density and low density at 0.05 significance level.
+
+3. **Paired T-Test**: Determine whether there is a difference between the means of two related or paired samples.
+
+Test statistic for paired t-test
+$$
+\begin{align*}
+t= \frac{\bar{d}} {s_d/\sqrt{n}}\sim\text{t}(n-1)
+\end{align*}
+$$
+To perform paired t-test, we need to set **paired=TRUE**.
+
+**Example:** If the yield from high density plot and low density plot were paired according to the same location,block, and fertilizer in the CROP experiment, then a paired t-test can be used to test the density effect.
+```{r}
+crop_paired <- read.csv("crop-paired t-test.csv",colClasses=c(rep("factor",3),"numeric","numeric"))
+#t.test(yield~density, data=crop_paired, paired=TRUE) #cannot use 'paired' in formula method
+t.test(crop_paired$high.density, crop_paired$low.density,paired=TRUE)
+```
+
+
+### **Chi-square ($\chi^2$) test** 
+<https://www.jmp.com/en_us/statistics-knowledge-portal/chi-square-test.html>
+
+A Chi-square test is a hypothesis testing method when data includes categorical variables and their frequencies. Two common Chi-square tests involve checking if observed frequencies in one or more categories match expected frequencies.
+
+Test statistic for Chi-square test
+$$\chi^2 = \sum_i\frac {(O_i - E_i)^2}{E_i}$$
+$O_i$ is the observed frequency of group i, $E_i$ is the expected frequency of group i. 
+
+If you have a single measurement variable, you use a **Chi-square goodness of fit test**. If you have two measurement variables, you use a **Chi-square test of independence**. There are other Chi-square tests, but these two are the most common. **Chisq.test()** performs goodness of fit test and independence test in R.
+
+The graph below lists the differences between Chi-square goodness of fit test and Chi-square test of independence.
+![Comparing Chi-square tests](C:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 3-T-test and Chi-square test/Chi square test comparison.png)
+
+
+#### **I. Assumptions of Chi-square Test**
+
+1. Data values are a simple random sample from the full population. 
+
+2. Categorical or nominal data. The Chi-square goodness of fit test is not appropriate for continuous data.
+
+3. A data set is large enough so that at least five values are expected in each of the observed data categories. If less than five in some observed categories, Fisher's exact test should be used for independence of two categorical or nominal variables.
+
+#### **II. Chi-square Goodness of Fit Test**
+
+https://www.jmp.com/en_us/statistics-knowledge-portal/chi-square-test/chi-square-goodness-of-fit-test.html
+
+The Chi-square goodness of fit test is a statistical hypothesis test used to determine whether a variable is likely to come from a specified distribution or not. You can use the test when you have counts of values for a categorical variable. The R function chisq.test() can be used as follow:
+```{r, eval=FALSE}
+chisq.test(x,p)
+```
+x is a numeric vector of the counts or frequencies. p is a vector of probabilities of the same length of x.
+
+**Example:** 
+
+A random sample of ten bags were collected. Each bag has 100 pieces of candy and five flavors. Test if the proportions of the five flavors in each bag are the same.
+
+Flavor | Observed Count | Expected Count
+:-----:|:-----:|:-----:
+Apple  |180|200
+Cherry |120|200
+Grape  |225|200
+Lime   |250|200
+Orange |225|200
+
+```{r}
+Obs<-c(180, 120, 225, 250, 225) # Every cell is greater than 5
+result<-chisq.test(Obs,p=c(1/5,1/5,1/5,1/5,1/5))
+result
+result$expected
+result$observed
+```
+The p-value is less than 0.05 significance level, so we reject the null hypothesis, which is that the proportions of flavors of candy are equal.
+
+#### **III. Chi-square Test of Independence**
+https://www.jmp.com/en_us/statistics-knowledge-portal/chi-square-test/chi-square-test-of-independence.html
+
+The Chi-square test of independence checks whether two variables are likely to be related or not. We have counts for two categorical or nominal variables.
+
+##### **Example**
+Assume we were devising a phone app that we hoped could distinguish between two visually similar species of grass given a photo. In an experiment, we show the app 10 cases of species A and 10 of species B and in each case we record the identification decision of the app. That will give four possibilities.
+
+species is A, app identifies it as A
+species is A, app identifies it as B
+species is B, app identifies is as B
+species is B, app identifies it as A
+
+```{r}
+app<-data.frame("App_A"=c(3,8),"App_B"=c(7,2), row.names = c("Truth_A", "Truth_B"))
+app
+chisq.test(app) #3,2 are less than 5, Fisher's exact test should be used for small sample size
+fisher.test(app)
+
+# increase sample size
+app2<-data.frame("App_A"=c(30,80),"App_B"=c(70,20), row.names = c("Truth_A", "Truth_B"))
+chisq.test(app2)
+
+app3<-data.frame("App_A"=c(8,3),"App_B"=c(7,2), row.names = c("Truth_A", "Truth_B"))
+fisher.test(app3)
+```
+Both p-values are greater than 0.05 significance level for data `app1` and `app3`, implies that the app results are independent on the true species results, although it looks like the app results depend on the true species results, this dependency cannot be tested for this small data set. When increasing the sample size 10 times as the data `app2`, even the frequency ratios are the same, but the p-value of chi-square test is much less than 0.05. 
+
+
+### **Practices** 
+
+1. The weights of 14 watermelons in a farm in kgs are 6.4, 8.5, 5.5, 7.5, 6.5, 4.5, 5.3, 2.5,2.4, 4.5, 5.5, 3.5, 3.2, and 4.2. As per old records, the mean weight of watermelon of that farm is 6kg. Test if the sample weight is greater than the recorded mean weight.
+```{r}
+weight<-c(6.4, 8.5, 5.5, 7.5, 6.5, 4.5, 5.3, 2.5,2.4, 4.5, 5.5, 3.5, 3.2, 4.2)
+shapiro.test(weight) 
+t.test(weight,alternative = "greater", mu = 6, conf.level = 0.95 )
+```
+Pass the normality test. Since p=0.97, we cannot reject the null hypothesis that the weight is equal to 6kg. 
+
+2. y1 and y2 are the rubber yield of two types of rubber plants, where the sample were drew independently. Test whether the two types of rubber plants differ in their yield.
+```{r}
+y1=c(6.21,5.70,6.04,4.47,5.22,4.45,4.84,5.84,5.88,5.82,6.09,5.59,6.06,5.59,6.74,5.55)
+y2=c(4.28,7.71,6.48,7.71,7.37,7.20,7.06,6.40,8.93,5.91,5.51,6.36, NA, NA, NA, NA)
+shapiro.test(y1) 
+shapiro.test(y2)
+
+#prepare data frame for bartlett.test
+df1<-data.frame(type=c(rep("A",length(y1)),rep("B", length(y2))), yield=c(y1,y2))
+bartlett.test(yield~type, data=df1)
+
+#two sample t-test with unequal variance
+t.test(yield~type, data=df1)
+t.test(y1,y2)
+boxplot(yield~type, data=df1)
+
+```
+
+3. In an experiment the plots were divided into two equal parts. One part received soil treatment A and the second part received soil treatment B. Each plot was planted with sorghum.The sorghum yield (kg/plot) are given below. Test the effectiveness of soil treatments on sorghum yield.
+```{r}
+x1<-c(49,53,51,52,47,50,52,53)
+x2<-c(52,55,52,53,50,54,54,53)
+
+d<-x1-x2
+shapiro.test(d) 
+#paired t-test
+t.test(d,mu=0)
+t.test(x1,x2, paired=TRUE) #p-value = 0.003478
+
+#compare paired t-test and independent two sample t-test
+#prepare data frame for bartlett.test
+df2<-data.frame(treatment=c(rep("A",length(x1)),rep("B", length(x2))), yield=c(x1,x2))
+bartlett.test(yield~treatment, data=df2)
+#two sample t-test with equal variance
+t.test(yield~treatment, data=df2,var.equal=TRUE) #p-value = 0.04807
+
+```
+We can see that paired t-test (p=0.0035) is more powerful than two sample t-test (p=0.0481) when the two samples are collected from the same experiment unit. 
+
+4. Randomly harvest 50 onions from 4 plots, count the numbers of three different sizes: small,medium, large, jumbo are 35, 55, 65, 30 respectively. Test if the probabilities of size is equal to the reported values: 20%,30%,35%,15%. 
+```{r}
+size<-c(35, 55, 65, 30)
+p<-c(0.2,0.3,0.35,0.15)
+chisq.test(size,p)
+```
+5. Table below shows observed frequencies of common versus rare plant species in South Australia and Victoria accordingto habitat type(dry, wet, and dry or wet). Does habitat(wet or dry) influence the prevalence of common or rare plant species in South Australia and Victoria?
+
+Species type | Dry | Wet | Dry or Wet
+:-----:|:-----:|:-----:|:-----:
+common  |60|249|117
+rare |25|199|44
+
+```{r}
+df<-data.frame("Hab_Dry"=c(60,25),"Hab_Wet"=c(249,199),"Hab_Dry/Wet"=c(117,44), row.names = c("Species_common", "Species_rare"))
+df
+chi<-chisq.test(df)
+chi
+chi$expected
+chi$observed
+
+#post.hoc test
+library(rstatix)
+pairwise_fisher_test(as.matrix(df), p.adjust.method = "fdr")
+library(chisq.posthoc.test)
+chisq.posthoc.test(df, method="bonferroni")
+
+```
+
+
+
+
+
+

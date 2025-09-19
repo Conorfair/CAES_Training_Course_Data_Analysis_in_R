@@ -1,0 +1,238 @@
+---
+title: "Non-linear Regression: Dose-Response Curve"
+author: "Xuelin (Lin) Luo^[Statistical consultant, xuelin@uga.edu]"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE,fig.width = 6, fig.height = 4} 
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+setwd("~/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 10-Non-linear Regression")
+
+library(bmd) #bmd pacakge will be used to calculate the benchmark dose
+library(Hmisc) # Hmisc package will be used to summarize a description of a dataset
+library(drc)  # drc package will be used create and plot dose response models
+library(broom.mixed)
+library(qpcR)
+library(aomisc)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(drcte)
+library(reshape2)
+library(multcomp)
+```
+
+```{r}
+#How to install packages from archives
+#https://cran.r-project.org/src/contrib/Archive/bmd/
+url<-"http://cran.r-project.org/src/contrib/Archive/bmd/bmd_0.5.tar.gz"
+pkgFile<-"bmd_0.5.tar.gz"
+download.file(url=url,destfile=pkgFile)
+
+#Expand the zip file
+#Look at the DESCRIPTION file in the expanded package directory
+#Install dependencies list in the DESCRIPTION file - none mentioned in this DESCRIPTION file
+#Install package
+install.packages(pkgs=pkgFile,type="source",repos=NULL)
+#Delete package tarball
+unlink(pkgFile)
+
+```
+
+### **1. Nonlinear Regression vs. Linear Regression**
+
+A regression model is called nonlinear, if the derivatives of the model with respect to the model parameters depends on one or more parameters. This definition is essential to distinguish nonlinear from curvilinear regression. A regression model is not necessarily nonlinear if the graphed regression trend is curved. A polynomial model such as $y = b_0 + b_1x + b_2x^2 + e$ appears curved when $y$ is plotted against $x$. It is, however, not a nonlinear model. To see this, take derivatives of $y$ with respect to the parameters $b_0$, $b_1$, and $b_2$: $$\frac{dy}{db_0} = 1, \frac{dy}{db_1} = x, \frac{dy}{db_2} = x^2$$
+None of these derivatives depends on a model parameter, the model is linear. In contrast, consider the three-parameter logistic growth curve model (Freund &Littell, 1991)
+
+$$
+\begin{align*}
+f(x)= \frac{b_0} {(1+(\frac{1-P}{P}))^{-b_1(x-XP)}}
+\end{align*}
+$$
+Take derivatives with respect to $b_0$, for example:
+$$
+\begin{align*}
+f(x)= \frac{1} {(1+(\frac{1-P}{P}))^{-b_1(x-XP)}}
+\end{align*}
+$$
+The derivative involves other parameters, hence the model is nonlinear.
+
+Fitting a nonlinear regression model to data is slightly more involved than fitting a linear model, but they have specific advantages:
+
+* Nonlinear models are often derived on the basis of physical and/or biological considerations, e.g., from differential equations, and have justification within a quantitative conceptualization of the process of interest.
+* The parameters of a nonlinear model usually have direct interpretation in terms of the process under study. In the case of the three-parameter logistic growth curve model above, for example, the response takes on a sigmoidal shape, where $b_0$ is the upper asymptote, $b_1$ is the relative slope.
+* Constraints can be built into a nonlinear model easily and are harder to enforce for linear models. If, e.g., the response achieves an asymptotic value as $x$ grows, many nonlinear models have such behavior built in automatically.
+
+### **2. Fitting Nonlinear Regressions is an Iterative Process**
+
+One of the disadvantages of nonlinear models is that the process is iterative. In linear models, solutions for parameter estimates can be derived algebraically, while no closed form solutions or equations can be derived for nonlinear models.
+
+To estimate the parameters of the model, you commence with a set of user-supplied starting values. The software then tries to improve on the quality of the model fit to the data by adjusting the values of the parameters successively. The adjustment of all parameters is considered one iteration. In the next iteration, the program again attempts to improve on the fit by modifying the parameters. Once an improvement is not possible, the fit is considered converged.Care must be exercised in choosing good starting values. The fact that the program cannot improve on the model fit between successive iterations may not indicate that the best parameter estimates have been found, but indicate lack of progress of the iterative algorithm. It is possible to send the algorithm off into regions of the parameter space, from which it cannot escape, but that do not provide the best estimates. It is thus sensible to start the iterative process with different sets of starting values and to observe whether the program arrives at the same parameter estimates. If it does, your fine. Below is the illustration of local optimum and global optimum.
+
+![](c:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 10-Non-linear Regression/Global optimum1.png)
+
+<https://nilg.ai/202206/local-vs-global-optimization>
+
+![](c:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 10-Non-linear Regression/Global optimum2.png)
+
+<https://www.researchgate.net/figure/11-Illustration-of-local-optimum-and-global-optimum_fig16_306558608>
+
+To perform non-linear regression in R, you can use various functions and packages, including ‘nls’, ‘nlme‘, and ‘mgcv‘. List below gives some useful functions for nonlinear regression analysis (equation and R function).
+
+![](c:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 10-Non-linear Regression/nonLinearEquations.png)
+
+<https://www.statforbiology.com/_statbookeng/nonlinear-regression>
+
+### **3. Log-logistic Regression**
+
+There are many functions and packages for nonlinear regression in R. We only focus on log-logistic regression which was widely used in agricultural study to describe the sigmoid curves, like dose-response analysis, seed germination, herbicide degradation.
+![Sigmoid shape](c:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 10-Non-linear Regression/dose-response curve.png)
+<https://csdaw.github.io/ggprism/articles/web-only/ex1-dose.html>
+
+One of the most common curves is the symmetric log-logistic model with four parameters:
+$$
+\begin{align*}
+y= c +\frac{d−c} {1+ exp(b(log(x)-log(e)))}
+\end{align*}
+$$
+where $d$ is the higher asymptote, $c$ is the lower asymptote, $e$ is $x$ value producing a response half-way between $d$ and $c$,which is the $ED_{50}$, while $b$ is the slope around the inflection point. The parameter $b$ can be positive or negative and, consequently, $y$ may increase or decrease as $x$ increases.
+
+
+Package {drc} will be used to estimate the log logistic model and compare the parameters.This package was made to ease the analysis of dose-response curves. The function used to fit dose-response curves is **`drm(y~x, fct=...)`** with self-starter that automatically calculates initial parameters.The *`fct=argument`* identifies the particular dose-response model to be used. Type "`getMeanFunctions()`" after loading package {drc} to see all available, built-in dose-response models.
+
+#### **a. Model fitting**
+<https://rstats4ag.org/dose-response-curves.html> - "Statistical Analysis of Agricultural Experiments using R"
+
+**Example 1**: The training data set S.alba in the {drc} package consists of two dose-response curves, one for bentazone and one for glyphosate.
+
+```{r}
+head(S.alba,n=5)
+tail(S.alba,n=5)
+str(S.alba)
+View(S.alba)
+```
+
+Before fitting a model, let's get an idea of how the data look.
+```{r}
+S.B <- subset(S.alba, Herbicide=="Bentazone")
+## Plotting the data both on original scale and on log scale
+op <- par(mfrow = c(1, 2), mar=c(3.2,3.2,2,.5), mgp=c(2,.7,0)) #make two plots in two columns 
+plot(DryMatter ~ Dose, data=S.B, main="Original Dose Scale")
+plot(DryMatter ~ log(Dose+.1), data = S.B, main="Logarithmic Dose Scale")
+```
+
+Fitting a log-logistic model with four parameters of bentazon. *fct=LL.4()* specifies the model and parameter names.
+```{r}
+S.B.m1 <- drm(DryMatter ~ Dose, data=S.B, fct = LL.4(names = c("Slope", "Lower Limit", "Upper Limit", "ED50")))
+summary(S.B.m1)
+```
+
+The summary of the curve fitting shows the estimates of each of the four parameters and their standard errors. The p-values tell us if the parameters are different from zero. In this instance all four parameters are significantly different from zero and as seen on the graph the log-logistic curve seems to fit well to data.
+
+```{r}
+op <- par(mfrow = c(1, 2), mar=c(3.2,3.2,.5,.5), mgp=c(2,.7,0))
+plot(S.B.m1, broken=TRUE, bty="l",
+     xlab="Dose", ylab="DryMatter")
+plot(S.B.m1, broken=TRUE, bty="l",
+     xlab="Dose", ylab="DryMatter",type="all")
+## Set broken=TRUE, because on a logarithmic scale, which is the default in drc, a zero dose is not defined.
+```
+The slope of the dose-response curve at $ED_{50}$ has the opposite sign as compared to the sign of the parameter $b$. This is the consequence of the parameterization used in *drc* for the log-logistic model, a choice that is in part rooted in what was commonly used in the past. The actual slope of the tangent of the curve at $ED_{50}$ is determined:
+
+$$
+\begin{align*}
+\frac{-b} {(d-c)/(4*e)}
+\end{align*}
+$$
+
+#### **b. Checking the assumptions**
+The assumptions we must consider include:
+
+* Correct regression model
+* Variance Homogeneity
+* Normally distributed measurement errors
+* Mutually independent measurement error $\varepsilon$
+
+Number 1 and 4 are not our interests here. Number 2 is important if you want to infer on the variability of parameters. Although it will not change the parameter estimates much, it will affect the confidence interval of parameters which is important when comparing curves. Number 3 can be visually checked.
+
+```{r}
+#Graphical analysis of residuals
+op <- par(mfrow = c(1, 2), mar=c(3.2,3.2,2,.5), mgp=c(2,.7,0)) #put two graphs together
+plot(residuals(S.B.m1) ~ fitted(S.B.m1), main="Residuals vs Fitted")
+ abline(h=0)
+qqnorm(residuals(S.B.m1))
+ qqline(residuals(S.B.m1))
+```
+
+#### **c. Comparing models**
+
+One of the most popular ways of assessing goodness of fit for linear regression is the $R^2$. But $R^2$ cannot tell how well the curve fits to the data in nonlinear regression. AIC and BIC can still be used to compare models.
+
+```{r}
+## Linear regression
+linear.m1 <- lm(DryMatter ~ Dose, data=S.B)
+summary(linear.m1)
+S.B.m2<- drm(DryMatter ~ Dose, data=S.B, fct = LL.3(names = c("Slope", "Upper Limit", "ED50")))
+summary(S.B.m2)
+S.B.m3<- drm(DryMatter ~ Dose, data=S.B, fct = W1.4()) ##Weibull type 1 model with 4 parameters
+summary(S.B.m3)
+
+AIC(S.B.m1, S.B.m2, S.B.m3, linear.m1)
+BIC(S.B.m1, S.B.m2, S.B.m3, linear.m1)
+```
+The AIC values imply that LL.4 and W1.4 models are the best. Assuming the lower limit equals zero is not appropriate as in the model LL.3. Linear model is the worst one.
+
+#### **d. Comparing estimated parameters**
+
+When comparing dose-response curves of more herbicides on the same plant species or one herbicide on more plant species, **`compParm()`** in {drc} can be used to compare model parameters directly.
+
+```{r}
+S.alba.m1 <- drm(DryMatter ~ Dose, Herbicide, data=S.alba, fct = LL.4(names = c("Slope", "Lower Limit", "Upper Limit", "ED50")))
+summary(S.alba.m1)
+par(mfrow = c(1, 1), mar=c(3.2,3.2,2,.5), mgp=c(2,.7,0))
+plot(S.alba.m1, broken=TRUE)
+compParm(S.alba.m1,"Slope")
+compParm(S.alba.m1,"Lower Limit")
+compParm(S.alba.m1,"Upper Limit")
+compParm(S.alba.m1,"ED50")
+# The ED10, ED50, ED90 for the dry matter
+ED(S.alba.m1, c(10,50,90), interval="delta")
+# Compare ED90
+comped(c(44.899, 139.451), c(4.914, 37.512), log=FALSE, operator="-")
+```
+
+### **Practice**
+
+Weeds control data from Dr. Timothy Grey. Using log-logistic model with 4 parameters to fit the data, and comparing two curves.
+
+```{r}
+weed <- read.csv("Weeds.csv",colClasses=c("factor","numeric","numeric"))
+weed.m1 <- drm(y ~ rate, tx, data=weed, fct = LL.4(names = c("Slope", "Lower Limit", "Upper Limit", "ED50")))
+summary(weed.m1)
+plot(weed.m1, broken=TRUE)
+
+# Set lower limit to zeros for both treatments
+weed.m2 <- drm(y ~ rate, tx, data=weed, fct = LL.3(names = c("Slope", "Upper Limit", "ED50")))
+summary(weed.m2)
+plot(weed.m2, broken=TRUE)
+compParm(weed.m2,"Slope")
+compParm(weed.m2,"Upper Limit")
+compParm(weed.m2,"ED50")
+
+#Graphical analysis of residuals
+op <- par(mfrow = c(1, 3), mar=c(3.2,3.2,2,.5), mgp=c(2,.7,0)) #put three graphs together
+plot(residuals(weed.m2) ~ fitted(weed.m2), main="Residuals vs Fitted")
+ abline(h=0)
+qqnorm(residuals(weed.m2))
+ qqline(residuals(weed.m2))
+hist(residuals(weed.m2))
+
+
+```
+
+
+
+
