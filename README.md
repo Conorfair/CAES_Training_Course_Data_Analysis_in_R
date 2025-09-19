@@ -1,6 +1,6 @@
-# CAES Training Course: Data Analysis in R
+CAES Training Course: Data Analysis in R
 
-This is the repository for the training course discussing applied statistical analyses using the software R and RStudio. The seminar will be hosted both in-person and virtually via Zoom from September 29 - October 3 and October 6 - October 10 from 10:00 - 11:30. The in-person locations are the Griffin campus will be the second floor computer lab in the SLC and the XXX room at the Tifton campus. If you are unable to attend the seminar in-person, or would prefer to attend virtually, please register at this link - [XXX](https://zoom.us/meeting/register/7mKKhlwBTP2f4hNfACXA2Q). 
+This is the repository for the training course discussing applied statistical analyses using the software R and RStudio. The seminar will be hosted both in-person and virtually via Zoom from September 29 - October 3 and October 6 - October 10 from 10:00 - 11:30. The in-person locations are the Griffin campus will be the second floor computer lab in the SLC and the XXX room at the Tifton campus. If you are unable to attend the seminar in-person, or would prefer to attend virtually, please register at this link - [Zoom Registration](https://zoom.us/meeting/register/7mKKhlwBTP2f4hNfACXA2Q). 
 
 We have included Markdown files covering the following topics:
 
