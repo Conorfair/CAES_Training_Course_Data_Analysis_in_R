@@ -1,6 +1,8 @@
-# CAES_Training_Course_Data_Analysis_in_R
+# CAES Training Course: Data Analysis in R
 
-This is the repository for the training course discussing applied statistical analyses using the R software. We have included CSV and markdown files for the following topics:
+This is the repository for the training course discussing applied statistical analyses using the software R and RStudio. The seminar will be hosted both in-person and virtually via Zoom from September 29 - October 3 and October 6 - October 10 from 10:00 - 11:30. The in-person locations are the Griffin campus will be the second floor computer lab in the SLC and the XXX room at the Tifton campus. If you are unable to attend the seminar in-person, or would prefer to attend virtually, please register at this link - [XXX](https://zoom.us/meeting/register/7mKKhlwBTP2f4hNfACXA2Q). 
+
+We have included Markdown files covering the following topics:
 
 1) Introduction to R
 2) Graphics and Data Visualization
@@ -13,3 +15,6 @@ This is the repository for the training course discussing applied statistical an
 9) Non-Parametric Models
 10) Non-Linear Regression
 
+The Markdown files can be found in the "scripts" folder along with the rendered (knitted) .html documents. Each topic has discussions about how to apply the statistical theory along with examples drawn from agricultural datasets - when possible. We have also included some helpful details on how to use the R/RStudio coding software/language.
+
+To help prepare for the seminar you can review the Markdown files at your leisure and prepare questions. Furthermore, the seminars for each day will be recorded and shared with all registrants at the end of the seminar. If you have questions about any of the content, please feel free to email us (cfair13@uga.edu, or xuelin@uga.edu). We look forward to seeing you during the seminar.
