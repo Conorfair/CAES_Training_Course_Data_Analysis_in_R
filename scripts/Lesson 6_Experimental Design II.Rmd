@@ -1,0 +1,643 @@
+---
+title: "Experimental Design II"
+author: "Conor Fair"
+date: "2025-10-6"
+# Modifications to YAML - "Yet Another Markdown Language"
+# Specify output formats and options for each document type (e.g., PDF, MS Word, HTML)
+output:
+  html_document:                           # Options for HTML output
+    theme: flatly                           # Sets a Bootstrap theme for HTML
+    toc: true                               # Include a table of contents
+    toc_float:                              # Floating TOC options
+      collapsed: false                      # Show all TOC sections expanded initially
+      smooth_scroll: true                   # Smooth scrolling to sections
+    number_sections: true                   # Number sections automatically
+    fig_caption: true                       # Automatically add figure captions
+    df_print: kable                         # Print data frames nicely using knitr::kable
+    code_folding: show                      # Allow code chunks to be hidden or shown interactively
+    highlight: tango                        # Syntax highlighting style for code
+
+  word_document:                            # Options for Word output
+    fig_caption: true                       # Include figure captions
+
+  pdf_document:                             # Options for PDF output
+    fig_caption: true                       # Include figure captions
+    toc: true                               # Include a table of contents
+    number_sections: true                   # Automatically number sections
+
+fontsize: 11pt                              # Sets the base font size in PDF output
+geometry: margin=1in                         # Sets page margins for PDF
+
+# Editor options in RStudio
+editor_options: 
+  chunk_output_type: console                 # Show code chunk output in the console by default
+  markdown: 
+    wrap: 72                                # Wrap lines at 72 characters for readability in Markdown view
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+#Necessary Libraries
+pacman::p_load(agridat,tidyverse,dplyr, #data import and handling
+               conflicted,#handling function conflicts
+               emmeans,multcomp,multcompView, #adjusted mean comparisons
+               ggplot2,ggpp,desplot,gridExtra,ggfortify,gganimate,gifski, #plots
+               forcats,stringr, performance, #others
+               nlme,glmmTMB,lme4,lmerTest,pbkrtest,AICcmodavg,DHARMa) #linear mixed model
+
+# conflicts: identical function names from different packages
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("summarize","dplyr")
+conflict_prefer("lmer","lmerTest")
+options(scipen=999)
+
+# the package "mixedup" is not on CRAN, so that you must install
+# it once with the following code:
+#withr::with_envvar(c(R_REMOTES_NO_ERRORS_FROM_WARNINGS = "true"),
+#  remotes::install_github('m-clark/mixedup'))
+
+```
+
+# Experimental Design cont.
+
+When there are further limitations as to how the experimental units can be randomly assigned to different treatment groups there are more complicated experimental designs that can be used to properly complete the analysis to reflect this limitation in randomization. We will cover Split-Plot designs and Repeated Measures.
+
+# Split-plot Design
+
+There are situations where the logistical constraints of setting up an experiment require that there be separate random assignments of levels of factors where levels of some factor are assigned to larger experimental units (whole plots) and the levels of other factors are assigned to smaller experimental units (sub plots) within each whole plot. This unequal scale of randomization requires specific code to properly represent this experimental design in the model. While we will be using linear mixed effects models, we will wait for the mixed effects models lesson to go into the details this analysis. 
+
+#### Review the Experimental Design
+
+The data for this example is a slightly modified version of the yield (kg/ha) trial from the RCBD example now laid out as a split-plot design (Gomez & Gomez 1984). The trial had 4 genotypes (G), 6 nitrogen levels (N or n_amount) with 3 complete replicates (rep) and 6 incomplete blocks (mainplot - columns) within each replicate.
+
+#### Importing the Data
+
+See the "tidy" format
+
+```{r}
+dataURL <- "https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Split_Plot_Design.csv"
+dat <- read.csv(dataURL)
+head(dat)
+```
+
+#### Data Description
+
+The variables rep, mainplot, N, and G needs to be encoded as a factor instead of the character variable R uses as a default. The mutate_at function changes the selected variable (rep, mainplot, N, or G) to the chosen variable type (as.factor).
+
+```{r}
+dat <- dat %>%
+  mutate_at(vars(rep, mainplot, N, G),as.factor) #can use "rep:N" to include all columns between rep and N
+```
+
+#### Exploring the Data
+
+We can produce the field layout of the trial using the desplot() function. The data object needs to have columns that identify the row and column of each plot in the trial. The form argument fills the color of each experimental unit by rep in this instance with a header for each rep. The text argument shows the genotype names in each plot. The remaining arguments are formatting including the main title.
+
+```{r}
+desplot(data=dat,
+        form=rep~col+row|rep, #fill color per rep, headers per rep
+        text=G,cex=1,shorten="no", #show genotype names per plot
+        col=N, #color of genotype names for each N-level
+        out1=mainplot,out1.gpar=list(col="black"), #lines between mainplots
+        out2=row,out2.gpar=list(col="darkgrey"), #lines between rows
+                main="Field Layout",show.key=T,key.cex = 0.7) #formatting
+```
+
+The field was first divided into three blocks (replicates). Then, each block was divided into six main plots (whole plot). For every block (replicates) separately, the six fertilizer treatments were randomly allocated to the main plots. Every main plot was then split into four sub plots to accommodate the four varieties. Separately for each main plot, the varieties were randomly allocated to the four sub plots. It is important to recognize that nitrogen (main plot) was randomized according to a randomized complete block design with the replicates as block. Varieties (sub plot) were also randomized according to a randomized complete block design where the main plot is the block. This type of split-plot design is the most common, but there are many other forms of the split-plot design based on how the main plot and sub plot factors are randomized
+
+We then look at the arithmetic means and standard deviations for each genotype and nitrogen levels separately, but also their combinations. You can also arrange the tibble based on decreasing mean values
+
+```{r}
+dat %>%
+  group_by(G) %>%
+  dplyr::summarize(mean=mean(yield),
+            std.dev=sd(yield))%>%
+  arrange(desc(mean))
+
+dat%>%
+  group_by(N)%>%
+  dplyr::summarize(mean=mean(yield),
+            std.dev=sd(yield))%>%
+  arrange(desc(mean))
+
+dat%>%
+  group_by(N,G)%>%
+  dplyr::summarize(mean=mean(yield),
+            std.dev=sd(yield))%>%
+  arrange(desc(mean))%>%
+  print(n=Inf) #show more than default 10 rows
+```
+
+A simple plot of the raw data also helps to visualize the distribution of the yield for each genotype nitrogen treatment combination. The point geometry produces a scatter plot. The ylim argument forced the y-axis to start at 0. The theme_classic argument produces a clearer plot format.
+
+```{r}
+ggplot(data=dat,
+       aes(y=yield,x=N,color=N))+ #different colors for the level of nitrogen
+  facet_wrap(~G)+ #facet per G level - "labeller=label_both" adds the variable name to each facet graph
+  geom_point()+
+  scale_y_continuous(limits=c(0,NA), #make y=axis start at 0
+                     expand=expansion(mult=c(0,0.1))#no space below 0
+                     )+
+  scale_x_discrete(name=NULL)+ #x-axis with no name label
+  theme_bw()+ #alternative plot theme with more grid lines - personal preference for theme_classic
+  theme(legend.position = "bottom") # legend on bottom
+```
+
+#### Fitting ANOVA Models with R 
+
+We fit a linear model with yield as the response variable. The remaining parts of the model can be broken up into two parts - the design effects and treatment effects. The treatment effects are genotype, nitrogen level, and their interaction as the fixed effects. For the split-plot design there are two randomization units to be represented in the linear model - the main plots and sub plots. Each randomization unit needs to be represented by a random effect so each randomization unit has its own error term. 
+
+The goal is to determine if there is a difference in yield between varieties and where those differences are.
+
+The interaction notation N*G is short for N+G+N:G
+
+```{r}
+mod_re<-lmerTest::lmer(yield~N*G+(1|rep)+(1|rep:mainplot),data=dat) 
+summary(mod_re) #We can ignore the Singular fit warning message for now
+
+mod_re %>% car::Anova(type=3,test.statistic="F")
+epsilon<-residuals(mod_re)
+```
+
+#### Sums of Squares Review
+
+There are three types of sums of squares (1, 2, or 3). This is an important consideration when the data is unbalanced (missing data). To demonstrate the differences we will consider a model that includes two categorical independent variables (Factor A and Factor B). The model will test the two main effects and the interaction between the two factors. Type 1 sums of squares is also called "sequential" sums of square that tests for Factor A, then Factor B, then the interaction of Factor A and B. When the data is unbalanced the sums of squares will give a different result depending on which main effect is considered first. It is rare that you want to test the main effects sequentially, so normally you should use Type 2 or 3 sums of squares. 
+
+Type 2 sums of squares is used only when you are not testing an interaction, and tests each main effect after the other main effect. Type 3 sums of squares is used when you are testing an interaction. If you test the interaction and it is not significant, then you can test the main effects alone and use the type 2 sums of squares - it is more powerful than type 3.
+
+This link can provide more details for your reference: <https://www.r-bloggers.com/2011/03/anova-–-type-iiiiii-ss-explained/#:~:text=The%20anova%20and%20aov%20functions%20in%20R%20implement%20a%20sequential,levels%20of%20the%20other%20factor.>
+
+#### Assumptions
+
+Multiple ways to assess model assumptions - the autoplot function used before doesn't work with lmer models.
+
+```{r}
+qqnorm(epsilon)
+qqline(epsilon)
+
+plot(mod_re,type=c("p","smooth"),col.line=1)
+
+plot(residuals(mod_re)~fitted(mod_re))
+abline(h=0)
+
+lattice::qqmath(mod_re)
+
+check_model(mod_re,check=c("normality","homogeneity"))
+
+shapiro.test(epsilon)
+
+car::leveneTest(epsilon~N*G,data=dat)
+```
+
+Results indicate the satisfaction of linear model assumptions, so we can move onto multiple comparisons tests.
+
+#### Mean Comparisons
+
+Following a significant F-test, we compare the variety means. We will show all pairwise comparisons using the colon between the two factors.
+
+```{r}
+all_mean_comparisons_tukey_re<-mod_re%>%
+  emmeans(specs=~N:G)%>%
+  cld(Letters=letters)
+all_mean_comparisons_tukey_re
+```
+
+#### Data Visualization
+
+Create a plot that displays both the raw data and results from the multiple comparisons tests of the adjusted means from the linear model. First create a tibble with an additional column that combined the N and G variables, and then sorts the rows on increasing values of emmean. Then create a similar table for the raw data.
+
+```{r}
+all_mean_comparisons_tukey_re<-all_mean_comparisons_tukey_re%>%
+  as_tibble()%>%
+  mutate(N_G=paste0(N,"-",G))%>%
+  mutate(N_G=fct_reorder(N_G,emmean))
+
+dat<-dat%>%
+  mutate(N_G=paste0(N,"-",G))%>%
+  mutate(N_G=fct_relevel(N_G,levels(all_mean_comparisons_tukey_re$N_G)))
+
+RCBD_Plot_tukey<-ggplot() +
+  geom_point(data=dat,aes(y=yield,x=N_G,color=N),position=position_nudge(x=-0.4))+ # black dots representing the raw data
+  geom_boxplot(data=dat,aes(y=yield,x=N_G),width=0.25,outlier.shape=NA,position=position_nudge(x=-0.2))+#black boxplot
+  geom_point(data=all_mean_comparisons_tukey_re,aes(y=emmean,x=N_G),size=2,color="red")+# red dots representing the adjusted means
+  geom_errorbar(data = all_mean_comparisons_tukey_re,aes(ymin=lower.CL,ymax=upper.CL,x=N_G),color="red",width=0.1)+# red error bars representing the confidence limits of the adjusted means
+  geom_text(data=all_mean_comparisons_tukey_re,aes(y=10000,x=N_G,label=str_trim(.group)),color="red",
+            position=position_nudge(x=-0.2),hjust=0,angle=90)+ # red letters 
+  scale_y_continuous(name="Yield",limits=c(0,11000),expand=expansion(mult=c(0,0.1)))+
+  scale_x_discrete(name="Nitrogen-Genotype combination")+
+  theme_classic()+ # clearer plot format 
+labs(caption=str_wrap("Black dots represent raw data. Red dots and error bars represent estimated marginal means ± 95% confidence interval per group. Means not sharing any letter are significantly different by the t-test at the 5% level of significance.", width = 120))+
+  theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1),legend.position="bottom")
+RCBD_Plot_tukey
+```
+
+#### Clear R's working memory
+
+```{r}
+rm(list=ls())
+dev.off()
+```
+
+# Repeated Measures
+
+When repeated observations on made on the same individual experimental unit this violates one of the linear model assumptions - no autocorrelation among errors. This analysis requires some specific steps to account for the temporal autocorrelation. We will first fit a model that assumes no autocorrelation. Then we will fit multiple models that assume different types of temporal autocorrelation and compare them to see which fits the data best.
+
+#### Review the Experimental Design
+
+Data from a sorghum trial laid out as a randomized complete block design with five blocks and four sorghum varieties as the only treatment factor. The response variable - leaf area index - was measured in five consecutive weeks on each plot starting two weeks after emergence. The repeated observation variable (week) needs to be treated as a factor - all measurements were made at discrete time points. This dataset is comprised of 100 values resembling longitudinal data - repeated measures or time series analysis.
+
+The week factor is not a treatment factor that can be randomized. The repeated measurements of the same experimental unit are likely to be serially correlated, which need to be accounted for to produce a non-biased estimate of the differences between varieties.
+
+#### Importing the Data
+
+We also include the steps to format the necessary variables to be factors.
+
+```{r}
+# data - reformatting agriTutorial::sorghum
+dat <- agriTutorial::sorghum %>% # data from agriTutorial package
+  rename(block = Replicate, 
+         weekF = factweek,  # week as factor
+         weekN = varweek,   # week as numeric/integer
+         plot  = factplot) %>% 
+  mutate(variety = paste0("var", variety),    # variety id
+         block   = paste0("block", block),    # block id
+         weekF   = paste0("week", weekF),     # week id
+         plot    = paste0("plot", plot),      # plot id
+         unit    = paste0("obs", 1:n() )) %>% # observation id - needed for glmmTMB model
+  mutate_at(vars(variety:plot, unit), as.factor)
+head(dat)
+```
+
+#### Exploring the Data
+
+The lack of row and column variables prevent us from using the desplot function to create a figure that shows the experimental design. Descriptive tables will show the arithmetic means and standard deviations for leaf area index per variety. We can use the pivot_wider function to get mean values for each week.
+
+```{r}
+dat%>%
+  group_by(variety) %>% 
+  summarize(mean=mean(y,na.rm=TRUE),std.dev=sd(y,na.rm=TRUE)) %>% 
+  arrange(desc(mean)) # sort
+  
+dat%>%
+  group_by(weekF, variety) %>% 
+  summarize(mean = mean(y, na.rm=TRUE)) %>% 
+  pivot_wider(names_from = weekF, values_from = mean) #pivot wider creates the table with each week as a column
+```
+
+We can create an animated plot that shows the change in leaf area index by variety across the five weeks.
+
+```{r}
+var_colors <- c("#8cb369", "#f4a259", "#5b8e7d", "#bc4b51")
+names(var_colors) <- dat$variety %>% levels()
+
+gganimate_plot <- ggplot(
+  data = dat, aes(y = y, x = weekF,
+                  group = variety,
+                  color = variety)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(alpha = 0.5, size = 3) +
+  scale_y_continuous(
+    name = "Leaf area index",
+    limits = c(0, 6.5),
+    expand = c(0, 0),
+    breaks = c(0:6)
+  ) +
+  scale_color_manual(values = var_colors) +
+  theme_bw() +
+  theme(legend.position = "bottom", 
+        axis.title.x = element_blank()) +
+  transition_time(weekN) +
+  shadow_mark(exclude_layer = 2) 
+
+animate(gganimate_plot, renderer = gifski_renderer()) # render gif
+```
+
+#### Fitting ANOVA Models with R
+
+An inefficient approach is to model a subset of the data from one week using either a fixed effect for block or random effect. 
+
+```{r}
+dat.wk1<-dat%>%filter(weekF=="week1") # subset data from first week only
+mod.wk1<-lm(y~variety+block,data=dat.wk1)
+anova(mod.wk1)
+mod.wk1_re<-lmerTest::lmer(y~variety+(1|block),data=dat.wk1)
+anova(mod.wk1_re)
+
+dat.wk2<-dat%>%filter(weekF=="week2")
+mod.wk2<-lm(y~variety+block,data=dat.wk2)
+anova(mod.wk2)
+mod.wk2_re<-lmerTest::lmer(y~variety+(1|block),data=dat.wk2)
+anova(mod.wk2_re)
+
+#Repeat with other weeks
+```
+
+We can also fit a model with all weeks combined.
+
+It is reasonable to assume that the treatment effects evolve over time and thus are week-specific. Furthermore, there could be variability among blocks over the weeks. The glmmTMB function allows us more flexibility than the lmer function.
+
+```{r}
+mod.iid<-glmmTMB(y~weekF*variety+(1|block)+(1|unit), #add random unit term to mimic error variance
+                 dispformula=~0, #fix original error variance to 0
+                 REML=TRUE, #needs to be stated since default is ML
+                 data=dat)
+
+mod.iid%>%broom.mixed::tidy(effects="ran_pars",scales="vcov")
+```
+
+These results assume independent and homogeneous error term, which MAY be wrong. We will now test for possible covariance structures for the error term that improve overall model fit. This should be done before assessing the significance of any effect - the model assumptions should be met before assessing the significant differences among the varieties.
+
+#### Autocorrelated Errors
+
+Experimental units on which repeated observations are made are often referred to as subjects. We would now like to allow measurements taken on the same subjects (plot in this case) to be serially correlated, while observations on different subjects are still considered independent. More specifically, we want the errors of the respective observations to be correlated in our model. It is also reasonable to assume a weaker correlation between errors that are further apart in time between measurements. 
+
+#### AR(1)
+
+The most popular correlation structure is called first order autoregressive AR(1). This error structure works best when all time points are equally spaced. Other variance structures are possible and should also be considered. 
+
+```{r}
+mod.AR1 <- glmmTMB(formula = y ~ weekF * variety + (1|block) +
+                   ar1(weekF + 0 | plot), # ar1 structure as random term to mimic error var
+                   dispformula = ~ 0, # fix original error variance to 0
+                   REML = TRUE,       # needs to be stated since default = ML
+                   data = dat) 
+
+# Extract variance component estimates
+mod.AR1 %>% broom.mixed::tidy(effects = "ran_pars", scales = "vcov")
+```
+
+#### Compound Symmetry
+
+Compound symmetry can be modeled as standard - homogeneous (nlme only - not showing here) or heterogeneous (glmmTMB) to model the error term. Assumes the correlation is constant regardless of how far apart the measurements are. The heterogeneous compound symmetry is a simple extension of the homogeneous compound symmetry structure with more parameters to allow for the variances along the diagonal of the matrix to be different.
+
+```{r}
+mod.hCS <- glmmTMB(formula = y ~ weekF * variety + (1|block) +
+                   cs(weekF + 0 | plot), # hcs structure as random term to mimic error var
+                   dispformula = ~ 0, # fix original error variance to 0
+                   REML = TRUE,       # needs to be stated since default = ML
+                   data = dat) 
+
+# show variance components
+mod.hCS %>% broom.mixed::tidy(effects = "ran_pars", scales = "vcov")
+```
+
+#### Toeplitz
+
+Toeplitz (glmmTMB only) can be calculated faster than similar AR(1) approach. Toeplitz is unique from AR(1) in that the correlations do not necessarily have the same pattern as is the case in AR(1). This correlation structure is only possible using the glmmTMB function.
+
+```{r}
+mod.Toep <- glmmTMB(formula = y ~ weekF * variety + (1|block) +
+                   toep(weekF + 0 | plot), # teop structure as random term to mimic err var
+                   dispformula = ~ 0, # fix original error variance to 0
+                   REML = TRUE,       # needs to be stated since default = ML
+                   data = dat) 
+
+# show variance components
+mod.Toep %>% broom.mixed::tidy(effects = "ran_pars", scales = "vcov")
+```
+
+#### Unstructured Variance
+
+The unstructured variance structure is the most "liberal" that allows every term to be different. In doing so it requires fitting the most parameters. 
+
+```{r}
+mod.UN <- glmmTMB(formula = y ~ weekF * variety + (1|block) +
+                   us(weekF + 0 | plot), # us structure as random term to mimic error var
+                   dispformula = ~ 0, # fix original error variance to 0
+                   REML = TRUE,       # needs to be stated since default = ML
+                   data = dat) 
+
+# show variance components
+mod.UN %>% broom.mixed::tidy(effects = "ran_pars", scales = "vcov")
+```
+
+#### Model Selection
+
+In order to select the best model here, we can simply compare their AIC values, since all models are identical regarding their fixed effects. The smaller the value of AIC, the better the fit.
+
+```{r}
+AICcmodavg::aictab(
+  cand.set = list(mod.iid, mod.hCS, mod.AR1, mod.Toep, mod.UN), 
+  modnames = c("iid", "hCS", "AR1", "Toeplitz", "UN"),
+  second.ord = FALSE) # get AIC instead of AICc
+```
+
+According to AIC values the UN correlation structure has the lowest AIC value as no others are within within 2. It is common to use Delta AIC < 2 to select a model. We will now review the UN model in the following steps.
+
+The Anova function produces the table of F-Statistics to determine if there significant differences among the different levels of the varieties tested. 
+
+```{r}
+mod.UN %>% car::Anova(type=3) #type II sums of squares is not appropriate with interaction
+epsilon<-residuals(mod.UN) #used to test model assumptions
+```
+
+#### Assumptions
+
+Before we look at any multiple comparisons we need to confirm that the model assumptions have been met.
+
+```{r}
+qqnorm(epsilon)
+qqline(epsilon)
+
+plot(residuals(mod.UN)~fitted(mod.UN))
+abline(h=0)
+
+#compared to iid model
+plot(residuals(mod.iid)~fitted(mod.iid)) #less obvious 
+abline(h=0)
+
+check_model(mod.UN,check=c("normality","homogeneity"))
+
+
+check_model(mod.iid,check=c("normality","homogeneity"))
+
+
+shapiro.test(epsilon)
+
+car::leveneTest(epsilon~weekF*variety,data=dat)
+```
+
+Results indicate the satisfaction of linear model assumptions, so we can move onto multiple comparisons tests.
+
+#### Mean Comparisons
+
+```{r}
+all_mean_comparisons_tukey_UN<-mod.UN%>% #all possible comparisons aren't needed based on primary objectives for comparing varieties within week
+  emmeans(specs=~variety:weekF)%>%
+  cld(Letters=letters)
+
+withinWeek_mean_comparisons_tukey_UN<-mod.UN%>% 
+  emmeans(specs=~variety|weekF)%>%
+  cld(Letters=letters)
+```
+
+#### Data Visualization
+
+Create a plot that displays both the raw data and results from the multiple comparisons tests of the adjusted means from the linear model. First create a tibble with an additional column that combined the week and variety variables, and then sorts the rows on increasing values of emmean. Then create a similar table for the raw data.
+
+```{r}
+withinWeek_UN_Plot_tukey<-ggplot() +
+  facet_wrap(~weekF,labeller=label_both,nrow=1)+ #facet per G level
+  geom_point(data=dat,aes(y=y,x=variety))+# dots representing the raw data
+  geom_point(data=withinWeek_mean_comparisons_tukey_UN,aes(y=emmean,x=variety),color="red",position=position_nudge(x=0.1))+# red dots representing the adjusted means
+  geom_errorbar(data=withinWeek_mean_comparisons_tukey_UN,aes(ymin=lower.CL,ymax=upper.CL,x=variety),color="red",width=0.1,position=position_nudge(x=0.1))+# red error bars representing the confidence limits of the adjusted means
+  geom_text(data=withinWeek_mean_comparisons_tukey_UN,aes(y=emmean,x=variety,label=str_trim(.group)),color="red",
+            position=position_nudge(x=0.2),hjust=0)+ # red letters 
+  scale_y_continuous(name="Yield",limits=c(0,NA),expand=expansion(mult=c(0,0.1)))+
+  scale_x_discrete(name=NULL)+
+  theme_classic()+ # clearer plot format 
+labs(caption=str_wrap("Black dots represent raw data. Red dots and error bars represent estimated marginal means ± 95% confidence interval per group. Means not sharing any letter are significantly different by the t-test at the 5% level of significance.", width = 120))+
+  theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1),legend.position="bottom")
+withinWeek_UN_Plot_tukey
+```
+
+#### Clear R's working memory
+
+```{r}
+rm(list=ls())
+dev.off()
+```
+
+# Practice Example
+
+We will use the data from an experiment conducted in a greenhouse in Silver Bay, Minnesota. Plants exposed to different (three) treatments were observed over a 40 day period. Make sure to modify the variable types to factor for the repeated measures analysis. Fit a linear model assuming no random effects, a linear mixed effects model with a random intercept for each plant, and a linear mixed effects model that tests unstructured variance, heterogeneous compound symmetry, autoregressive order-1, homogeneous diagonal variance, and and heterogeneous diagonal variance structures.
+
+```{r}
+library(agridat)
+data(pederson.lettuce.repeated)
+dat <- pederson.lettuce.repeated
+libs(lattice)
+dat <- dat[order(dat$day),]
+xyplot(weight ~ day|trt, dat, type='l', group=plant, layout=c(3,1),
+main="pederson.lettuce.repeated")
+```
+
+# Tips if you get stuck
+
+### You really want to see the answers without trying yourself???
+
+```{r}
+
+#Remember to change the necessary variables to factors
+str(dat)
+dat$plant<-as.factor(dat$plant)
+dat$day<-as.factor(dat$day)
+
+#Fitting linear model with no random effect
+mod_lm<-lm(weight~trt*day,data=dat)
+
+#Fitting linear mixed model with random effect
+mod<-glmmTMB(weight~trt*day+(1|plant),data=dat)
+
+
+
+#Code to try when issues of convergence pop up
+#control=glmmTMBControl(optimizer=optim,optArgs=list(method="BFGS"))
+#control=glmmTMBControl(maxfun=20000)
+
+mod.UN<-glmmTMB(weight~trt*day+us(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat)
+mod.UN<-glmmTMB(weight~trt*day+us(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat,
+                control=glmmTMBControl(optimizer=optim,optArgs=list(method="BFGS")))
+
+#Unstructured Correlation - fit estimate for each pair of observations over time
+#Overparameterized model warning message - makes sense this unstructured covariance option fits a covariance estimate for every pair of observations
+
+
+mod.CS<-glmmTMB(weight~trt*day+cs(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat)
+mod.CS<-glmmTMB(weight~trt*day+cs(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat,
+                control=glmmTMBControl(optimizer=optim,optArgs=list(method="BFGS")))
+mod.HomD<-glmmTMB(weight~trt*day+homdiag(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat)
+mod.HetD<-glmmTMB(weight~trt*day+diag(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat)#Convergence warning - try different optimizer
+mod.HetD<-glmmTMB(weight~trt*day+diag(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat,
+                control=glmmTMBControl(optimizer=optim,optArgs=list(method="BFGS")))
+mod.AR1<-glmmTMB(weight~trt*day+ar1(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat) 
+
+AICcmodavg::aictab(
+  cand.set = list(mod, mod.CS, mod.HomD, mod.HetD, mod.AR1), 
+  modnames = c("iid", "hCS", "HomD", "HetD", "Ar1"),
+  second.ord = FALSE) # get AIC instead of AICc
+
+#AR1 model is best fitting model
+#Now to check assumptions and make any transformations as needed
+mod.AR1<-glmmTMB(weight~trt*day+ar1(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat) 
+plot(residuals(mod.AR1)~fitted(mod.AR1)) #less obvious 
+abline(h=0)
+check_model(mod.AR1,check=c("normality","homogeneity"))
+qqnorm(residuals(mod.AR1))
+qqline(residuals(mod.AR1))
+shapiro.test(residuals(mod.AR1))
+
+#Try polynomial term for day
+mod.AR1_poly<-glmmTMB(weight~trt*poly(day,2)+ar1(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat) 
+qqnorm(residuals(mod.AR1_poly))
+qqline(residuals(mod.AR1_poly))
+shapiro.test(residuals(mod.AR1_poly))
+plot(residuals(mod.AR1_poly)~fitted(mod.AR1_poly)) #less obvious 
+abline(h=0)
+
+#Other resources to assess assumptions for more complicated models
+sims=simulateResiduals(mod.AR1) 
+plot(sims,quantreg=T)
+
+sims=simulateResiduals(mod.AR1_poly) 
+plot(sims,quantreg=T)
+#KS Test: expected to follow a uniform distribution - not necessarily normal distribution values close to 1.0 indicate a good fit while values close to 0.0 indicate a poor fit.
+
+mod.AR1<-glmmTMB(log(weight)~trt*day+ar1(day+0|plant),
+                dispformula=~0,REML=TRUE,data=dat) 
+
+sims=simulateResiduals(mod.AR1) 
+plot(sims,quantreg=T)
+
+qqnorm(residuals(mod.AR1))
+qqline(residuals(mod.AR1))
+shapiro.test(residuals(mod.AR1))
+plot(residuals(mod.AR1)~fitted(mod.AR1)) #less obvious 
+abline(h=0)
+
+car::Anova(mod.AR1,type="III")
+
+within_means_tukey<-mod.AR1%>%
+  emmeans(~trt|day)%>%
+  cld(Letters=letters)%>%
+  as_tibble()%>%
+  rename(weight=emmean)
+within_means_tukey
+
+
+
+within_means_tukey_Plot<-ggplot(dat,aes(y=weight,x=trt))+
+  facet_wrap(~day,labeller=label_both)+ #facet per G level
+  geom_point(data=dat,aes(y=weight,x=trt,color=trt),
+             alpha=0.5,position=position_jitter(width=0.1))+# dots representing the raw data
+  geom_point(data=within_means_tukey,aes(y=exp(weight),x=trt),
+             color="red",position=position_nudge(x=0.2))+# red dots representing the adjusted means
+  geom_errorbar(data=within_means_tukey,aes(ymin=exp(lower.CL),ymax=exp(upper.CL),x=trt),
+                color="red",width=0.1,position=position_nudge(x=0.2))+# red error bars representing the confidence limits of the adjusted means
+  geom_text(data=within_means_tukey,aes(y=exp(weight),x=trt,label=str_trim(.group)),color="black",
+            position=position_nudge(x=0.3),hjust=0)+ # red letters 
+  scale_y_continuous(name="Weight (g)",limits=c(30,NA),expand=expansion(mult=c(0,0.1)))+
+  scale_x_discrete(name=NULL)+
+  theme_classic()+ # clearer plot format 
+  labs(caption=str_wrap("Opaque dots represent raw data. Red dots and error bars represent estimated marginal means ± 95% confidence interval per group. Means not sharing any letter are significantly different by the t-test at the 5% level of significance.", width = 120))+
+  theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1),legend.position="bottom")
+within_means_tukey_Plot
+
+```
+
+
+

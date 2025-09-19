@@ -1,0 +1,243 @@
+---
+title: "Commonly Used Non-parametric Methods in R"
+author: "Xuelin (Lin) Luo^[Statistical consultant, xuelin@uga.edu]"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE,fig.width = 6, fig.height = 4} 
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+setwd("~/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 9-Commonly Used Non-parametric Methods")
+library(ggpubr)
+library(plyr)
+library(tidyverse)
+library(car)
+library(rstatix) #wilcox_test() for two dependent samples
+library(BSDA) # SIGN.test()
+library(coin) #wilcox_test() for two independent samples
+library(agricolae) #post-hoc test
+```
+
+Parametric methods of statistical inference are based on the assumption of some underlying distribution of the data. Unfortunately, there are situations in which the data do not satisfy the distribution assumption. Under these situations, nonparametric methods are alternative methods which require no or vary limited assumptions to be made about the data. 
+
+This lecture will give an overview of commonly used nonparametric tests, and provide an easy guide for choosing them and using them in R. The nonparametric tests that will covered are sign test, Wilcoxon signed rank test, Wilcoxon rank sum test, Kruskal-Wallis test, Friedman’s chi-square test and aligned ranks test. 
+
+### **Parametric or Nonparametric Methods?**
+
+Parametric methods of statistical inference require you to assume that your data come from some underlying distribution whose general form is known, such as the normal, binomial, or Poisson. Statistical methods for estimation and hypothesis testing are then based on these assumptions. 
+
+In contrast, nonparametric statistical methods make few assumptions about the underlying distribution from which the data are sampled. One of their main advantages is that inference is not focused on specific population parameters, and it is thus possible to test hypotheses that are more general than statements about parameters. So nonparametric procedures can be used when the underlying distribution is unknown or when parametric assumptions are not valid. 
+
+The main disadvantage is that a nonparametric test is generally **less powerful** than the corresponding parametric test when the assumptions are satisfied (i.e. less likely to find a difference even if there really is one). However, for many of the commonly used nonparametric methods, the decrease in power is not large (Stokes, Davis, Koch, 2012).
+
+A second limitation of non-parametric tests is that they are **less informative** than parametric tests. For example, suppose we find a significant difference between group medians using a non-parametric test (see below). In that case, it can be difficult to understand which differences are driving the significant effect. On the other hand, if we can determine a suitable transformation and use an ANOVA model, we can deploy tools such as multiple comparison tests to understand the data better.
+
+Lastly, non-parametric models are **much less flexible** in some ways than parametric tests,i.e. there are non-parametric equivalents to some parametric tests. Still,there are many parametric tests for which there is no readily available nonparametric equivalent (e.g., the more complex designs of ANOVA).
+
+Most commonly used nonparametric tests covered in this paper are the alternatives of parametric tests based on the assumption that distribution of data or residuals is normal. Therefore, we just focus on the violation of normal distribution assumption. 
+
+Mean and variance are typically used to describe the center and spread of normally distributed data. They are also the key parameters to be estimated in parametric methods. If the data not normally distributed or contain outliers, these measures may not be robust enough to accurately describe the data. The median is a more robust measure of the center of distribution, in that it is not as heavily influenced by outliers and skewed data. As a result, the median is typically used with non-parametric test. The spread is less easy to quantify but is often represented by the interquartile range, which is simply the difference between the first and third quartiles (Pappas, Depuy. 2004). 
+
+The non-parametric tests we will discuss here are listed in the table below compared to equivalent parametric tests.
+
+ Test                 | Parametric test | Non-parametric test
+----------------------|-----------------|--------------------
+Differences between Two Dependent Samples | Paired t-test | Sign test, Wilcoxon signed-rank test
+Differences Between Two Independent Samples | Two sample test | Wilcoxon Rank Sum Test
+Differences in Three or More Independent Samples  | one-way ANOVA| Kruskal-Wallis Test
+RCBD(one factor)   | General linear model | Friedman’s test; Aligned rank test
+
+
+### **Differences between Two Dependent Samples**
+
+The assumption of paired t-test is that the observations are independent and identically normally distributed. If the data are not normally distributed, but the differences between the paired observations are mutually independent, and that each of the observed paired differences comes from the same continuous population, then the sign test or the signed rank test can be used to test if the observed paired difference is statistically significant or not.
+
+**$H_0$:** median of the signed differences is equal to zero.
+
+#### **1. Sign test**
+*`The sign test`* is as its name that it allocates a sign, either positive (+) or negative (-), to each difference according to whether it is greater or less than some hypothesized value, and considers whether this is substantially different from what we would expect by chance. The sign test is most useful if comparisons can only be expressed as var1 > var2, var1 < var2, or var1 = var2. If, instead, the observations can be expressed as numeric quantities, then the paired t-test or the Wilcoxon signed-rank test will usually have greater power than the sign test to detect consistent differences, because they take the magnitude of the observation into account.
+
+**Steps of sign test:**
+
+*	Step1: Subtract variable 2 from variable 1 to get the paired differences.
+*	Step2: Allocate a sign (+ or -) to each difference according to whether it is greater or less than the hypothesized value. (Differences exactly equal to the hypothesized value are dropped from the analysis).
+*	Step3: Count the number of positives and negatives. Save the smaller count, denoted S.
+*	Step4: calculate p-value according to S and sample size from binomial distribution table.
+
+#### **2. Signed rank test**
+The one-sample Wilcoxon signed-rank test can be used to test whether data comes from a symmetric population with a specified median. It uses the information on the magnitude of the observation by ranking all observations. 
+
+**Steps of signed rank test:**
+
+*	Step1: Subtract variable 2 from variable 1 to get the paired differences.
+*	Step2: Rank all differences according to their absolute values. Differences exactly equal to the hypothesized value are dropped from the analysis. If two differences have the same magnitude, regardless of sign, then they are given an average ranking.
+*	Step3: Allocate a sign (+ or -) to each difference according to whether it is greater or less than the hypothesized value as in the sign test.
+*	Step4: Sum all positive ranks and negative ranks. Save the smaller sum, denoted S.
+*	Step5: Calculate p-value according to S and sample size.
+
+
+**Example 1:**
+A researcher took 2 transplants from 15 varieties and randomly assigned them to either receive side-dressing or not. Yields were recorded. The interest is to test if side-dressing can dominantly increase yield.
+![](c:/Users/xuelin/OneDrive - University of Georgia/Documents/LXL/Arg_Stat/Notes of ideas/R workshops/Lesson 9-Commonly Used Non-parametric Methods/Sign test and Signed rank test.png)
+
+```{r}
+variety <- 1:15
+yld_side <-c(120, 156, 148, 95, 107, 98, 93, 114, 127, 134, 102, 96, 145, 96, 126)
+yld_nonside <- c(34, 87, 118, 97, 110, 82, 105, 95, 134, 41, 105, 92, 106, 101, 90)
+diff <- yld_side-yld_nonside
+signs <- sign(diff)
+pair <- data.frame(variety, yld_side, yld_nonside, diff, signs)
+
+# Visualize the data
+boxplot(diff) # some outliers
+hist(diff) # not normally distributed
+
+# Perform sign test using the binomial test function 
+binom.test(sum(diff > 0), length(diff), p=0.5, alternative="two.sided") #p=0.607
+binom.test(6, length(diff), p=0.5, alternative="two.sided")
+# library(BSDA)
+SIGN.test(diff, md = 0, alternative = "two.sided")
+SIGN.test(yld_side,yld_nonside, md = 0, alternative = "two.sided")
+
+```
+
+The interpretation of the result is that, if don’t consider the magnitude of the difference between the paired groups, then 9 positive values out of 15 observations is a result which happens by accident as p-value=0.607. Since the p-value=0.607 is greater than 0.05 significance level, we couldn't reject the null hypothesis that there is no difference of yield between having side-dressing and not having side-dressing.
+
+*`Wilcox signed rank test`*  considers the magnitude of the difference between the paired groups by ranking the absolute value of the difference. It can be conducted using **wilcox.test()** function in r.
+
+```{r}
+# Perform signed rank test
+# default method
+wilcox.test(yld_side, yld_nonside, paired=TRUE, exact=TRUE,correct = FALSE) #p=0.041
+```
+
+The p-value of sign test is 0.607. In contrast, signed rank test gives a significant p-value 0.041. The difference between the two test results confirms that signed rank is more powerful when data is numeric. 
+
+By default (if exact is not specified), an exact p-value is computed if the samples contain less than 50 finite values and there are no ties. Otherwise, a normal approximation is used.
+`correct=FALSE` option removes the continuity correction from the computation of the standardized x test statistic in the normal approximation.
+In this example, the sample size is not big, the large-sample normal approximation might not be adequate, so `correct=FALSE` in function **wilcox.test()** is recommended. However, **wilcox.test()** cannot handle the data with ties. **rstatix::Wilcox_test()**function was designed to remedy this flaw (not from library{coin}).
+
+```{r}
+library(rstatix)
+# Convert data from wide to long
+yield <- data.frame(treatment=rep(c("yld_side", "yld_nonside"),each=15), yld=c(yld_side, yld_nonside))
+#yield$treatment <-as.factor(yield$treatment)
+rstatix::wilcox_test(yld~treatment, alternative = "two.sided", data=yield, paired=TRUE, exact=TRUE) # p=0.044
+```
+The p-value changed from 0.041 to 0.044 after considering the ties.
+
+
+### **Differences between Two Independent Samples**
+
+
+#### **3. Wilcoxon rank sum test (Mann-Whitney U test)**
+
+When comparing two independent samples, Wilcoxon Rank Sum test investigates differences in medians, with the assumption of identical spreads (equal variances).
+
+**The steps of Wilcoxon rank sum test:**
+
+*	Step1: Rank all observations, ignoring which sample they come from. If two observations have the same magnitude, regardless of sample, then they are given an average ranking.
+*	Step2: Add up the ranks of the two samples.
+*	Step3: Calculate p-value according to the two sums of rank and sample sizes.
+
+**Example 2:**
+Let’s still use the data from example 1. Suppose objects of the experiment are not different varieties, but just 15 replicates from same variety. Then the two samples become independent where each sample has 15 replicates, and the 15 replicates are independent within each sample.
+
+```{r}
+# Visualize the data
+boxplot(yield$yld~yield$treatment) # some outliers in no-side dressing group
+yield %>%
+  ggplot( aes(x=yld, fill=treatment)) +
+  geom_histogram(color="black", alpha=0.6, position = 'identity', bins=20) +
+  scale_fill_manual(values=c("blue","yellow")) +
+  facet_wrap(~treatment)
+
+# Compare two variances
+yield$treatment <- as.factor(yield$treatment)
+leveneTest(yld~treatment, data=yield) #less sensitive than the Bartlett test to departures from normality
+```
+
+It should be noted that when the variances of the treatment groups are heterogeneous, the Type I error probabilities in the Wilcoxon Rank Sum test can increase by as much as 300%, with no indication that they asymptotically approach the nominal significance level as the sample size increases. Therefore, care should be taken when assuming that variances are, in fact, equal.
+
+```{r}
+# Perform Wilcoxon rank sum test
+wilcox.test(yld_side, yld_nonside,alternative = "two.sided", data=yield, exact=TRUE,correct = FALSE) #p=0.017 this one matches SAS normal approximation test result.
+library(coin)
+coin::wilcox_test(yld~treatment,alternative = "two.sided", data=yield, distribution="exact",paired=FALSE) #p=0.016 this one matches SAS  exact test result.
+rstatix::wilcox_test(yld~treatment,alternative = "two.sided", data=yield, exact=TRUE,paired=FALSE) #p=0.018
+
+```
+
+The more generalized Kolmogorov-Smirnov test look for differences in center, spread, or both. If the assumption of identical spreads can be met, then rank sum test is more powerful.
+
+### **Differences between Three or More Independent Samples**
+
+#### **4.Kruskal-Wallis Test (K-W test)**
+*`The K-W test`* (1952) is the non-parametric equivalent to the one-way ANOVA. Assumptions for the K-W test are that within each sample the observations are independent and identically distributed and the samples are independent of each other. This test is a generalization of the Wilcoxon Rank Sum test to three or more groups.The K-W test can be used in base R by function **kruskal.test()**, or via the **finalfit** package.
+
+When the sample sizes in the groups are small, the exact distribution of the test statistic should be used. If there are at least five observations per group, the p-value can be approximated using the asymptotic chi-square distribution with s-1 degrees of freedom, where s is the number of groups. 
+
+**Example 3:**
+There are three groups (treatments), group 1 has 10 observations, group 2 and 3 both have 6 observations. The measured records named response. 
+```{r}
+KW <- read.csv("K-W test.csv",colClasses=c("factor","numeric","numeric"))
+ggplot(KW, aes(x = group, y = response)) +
+  geom_point(aes(color = group, shape = group))
+kruskal.test(response~group, data=KW)
+
+# post-hoc test
+library(agricolae)
+comparison <- with(KW,kruskal(response,group,group=TRUE, p.adj="bon",main="median differences from K-W test")) # option "group=TRUE" requests to group method using letters
+comparison
+
+```
+
+
+#### **5.Friedman Test for Randomized Complete blocks**
+
+*`Friedman’s Chi-Square test`*(1937) is a nonparametric method for analyzing a randomized complete block design (RCBD). It depends only on the ranks of the observations within each block and is sometimes called the two-way analysis of variance by ranks. As the number of blocks increases, the distribution of the Friedman statistic approaches that of a chi-square random variable with s-1 df, where s is the number of treatments. 
+
+```{r}
+Friedman <- read.csv("Friedman test.csv",colClasses=c("factor","factor","numeric"))
+friedman.test(resist ~ type|subject, data=Friedman)
+library(rstatix)
+rstatix::friedman_test(resist ~ type|subject, data=Friedman) #pipe friendly # Both rstatix and coin packages have friedman_test() function
+boxplot(Friedman$resist~Friedman$type)
+
+library(agricolae)
+with(Friedman,friedman(subject,type, resist,alpha=0.05, group=TRUE,console=TRUE))
+```
+
+
+#### **6. Aligned Ranks Test for Randomized Complete blocks**
+
+When the number of blocks or treatments is small, the Friedman test has relatively low power. An alternative to the Friedman’s test is to use aligned ranks. The basic idea is to make the blocks more comparable by subtracting from each observation within a block some estimate of the location of the block, such as the average or median of the observations. The resulting differences are called aligned observations. Instead of separately ranking the observations within each block, you rank the complete set of aligned observations relative to each other. The resulting ranks are called aligned ranks.Thus, the ranking scheme is the same as that used in computing the K-W statistic. 
+
+```{r}
+ART <- ddply(Friedman, "subject", transform, resist.ct = scale(resist, scale=FALSE))
+ART2 <- ART %>% mutate(rank=rank(resist.ct, ties.method='average'))
+kruskal.test(resist.ct~type, data=ART2)
+```
+
+
+## **Post-hoc testing** 
+<https://rcompanion.org/handbook/F_10.html>
+
+```{r}
+# Post-hoc testing
+
+library(nparcomp)
+library(PMCMRplus) # PMCMRplus: Calculate Pairwise Multiple Comparisons of Mean Rank Sums Extended
+frdAllPairsExactTest(Friedman$resist, Friedman$type,Friedman$subject, p.adjust.method = "bonferroni")
+friedmanTest(y=Friedman$resist, group=Friedman$type, blocks=Friedman$subject)
+# the pairwise Wilcoxon rank sum test with a bonferroni correction
+pairwise.wilcox.test(Friedman$resist, Friedman$type, p.adj = "bonf") # cannot handle data with ties
+kwAllPairsDunnTest(response ~ group, data=KW, method="bh") #Dunn test after K-W test
+```
+
+![Post-hoc tests](Post-hoc test.png)
+
+
+
