@@ -1,3 +1,5 @@
+<hr style="border:0.5px solid lightgray; margin:20px 0;">
+
 # CAES Training Course: Data Analysis in R
 ---
 ## Conor Fair and Xuelin Luo
