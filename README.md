@@ -1,9 +1,8 @@
 # CAES Training Course: Data Analysis in R
 
 ## Conor Fair and Xuelin Luo
-
-## September 29 - October 3 and October 6 - October 10, 2025
-## Time: 10:00 - 11:30
+ September 29 - October 3 and October 6 - October 10, 2025
+ Time: 10:00 - 11:30
 
 ## Overview
 
