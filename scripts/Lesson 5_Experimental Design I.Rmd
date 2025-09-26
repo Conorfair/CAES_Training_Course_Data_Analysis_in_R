@@ -2,8 +2,6 @@
 title: "Experimental Design I"
 author: "Conor Fair"
 date: "2025-10-3"
-# Modifications to YAML - "Yet Another Markdown Language"
-# Specify output formats and options for each document type (e.g., PDF, MS Word, HTML)
 output:
   html_document:                           # Options for HTML output
     theme: flatly                           # Sets a Bootstrap theme for HTML
@@ -16,19 +14,14 @@ output:
     df_print: kable                         # Print data frames nicely using knitr::kable
     code_folding: show                      # Allow code chunks to be hidden or shown interactively
     highlight: tango                        # Syntax highlighting style for code
-
   word_document:                            # Options for Word output
     fig_caption: true                       # Include figure captions
-
   pdf_document:                             # Options for PDF output
     fig_caption: true                       # Include figure captions
     toc: true                               # Include a table of contents
     number_sections: true                   # Automatically number sections
-
 fontsize: 11pt                              # Sets the base font size in PDF output
 geometry: margin=1in                         # Sets page margins for PDF
-
-# Editor options in RStudio
 editor_options: 
   chunk_output_type: console                 # Show code chunk output in the console by default
   markdown: 
@@ -41,7 +34,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, include=FALSE}
 #Necessary Libraries
-pacman::p_load(agridat, tidyverse,dplyr, # data import and handling
+pacman::p_load(agridat, tidyverse, dplyr, here, # data import and handling
                conflicted, # handling function conflicts
                emmeans, multcomp, multcompView, # adjusted mean comparisons
                ggplot2, ggpp, desplot, gridExtra, ggfortify, # plots
@@ -50,47 +43,46 @@ pacman::p_load(agridat, tidyverse,dplyr, # data import and handling
 # conflicts: identical function names from different packages
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
-conflict_prefer("summarize","dplyr")
+conflict_prefer("summarize", "dplyr")
 ```
 
 # Experimental Design
 
 When designing experiments, one of the more consequential decisions is how treatments are assigned experimental units. We mentioned Gauss-Markov assumptions and that some assumptions deal with how the experiment is designed. The relevant assumption here is that experimental units are randomly assigned to treatments. When researchers don't always have the tools or resources to meet this assumption, but thankfully there are methods to address this. When this assumption is met, the experiment is said to follow a completely randomized design (CRD).
 
-# Completely Randomized Design
+## Completely Randomized Design
 
-#### Review the Experimental Design
+### Review the Experimental Design
 
 Data published from (Mead et al. 1993) include trials of yield from four different melon varieties with six replicates or field plots. The allocation of the treatments (varieties) to the experimental units (plots) was completely at random - following a completely randomized design (CRD).
 
-#### Importing the Data
+### Importing the Data
 
 ```{r}
-dataURL <- "https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Completely_Randomized_Design.csv"
-dat <- read.csv(dataURL)
+dat <- read_csv(here("data", "Completely_Randomized_Design.csv"))
 
 str(dat)
 ```
 
-#### Data Description
+### Data Description
 
 The column variety needs to be encoded as a factor instead of the character variable R uses as a default. The mutate_at function changes the selected variable (variety) to the chosen variable type (as.factor).
 
 ```{r}
 dat <- dat %>%
-  mutate_at(vars(variety),as.factor)
+  mutate_at(vars(variety), as.factor)
 str(dat)
 ```
 
-#### Experimental Design
+### Experimental Design
 
 When the data file has information about the experimental design that is relevant to the analysis, it can be helpful to produce a figure showing how treatment groups were assigned. We can produce a field layout of the trial using the desplot() function. The data object needs to have columns that identify the row and column of each plot in the trial. The form argument fills the color of each experimental unit by variety in this instance. The text argument shows the variety names in each plot. The remaining arguments are formatting including the main title and the key is turned off in this instance.
 
 ```{r}
-desplot(data=dat,flip=TRUE,
-        form=variety~col+row,
-        text=variety,cex=1,shorten="no",
-        main="Field Layout",show.key=F)
+desplot(data = dat, flip = TRUE,
+        form = variety ~ col + row,
+        text = variety, cex = 1, shorten = "no",
+        main = "Field Layout", show.key = F)
 ```
 
 It is also a good idea to look at the arithmetic means and standard deviations for each variety.
@@ -98,39 +90,39 @@ It is also a good idea to look at the arithmetic means and standard deviations f
 ```{r}
 dat %>%
   group_by(variety) %>%
-  summarize(mean=mean(yield),
-            std.dev=sd(yield))
+  summarize(mean = mean(yield),
+            std.dev = sd(yield))
 ```
 
 A simple plot of the raw data also helps to visualize the distribution of the yield for each variety. The point geometry produces a scatter plot. The ylim argument forced the y-axis to start at 0. The theme_classic argument produces a clearer plot format.
 
 ```{r}
-ggplot(data=dat,
-       aes(y=yield,x=variety))+
-  geom_point()+
-  ylim(0,NA)+
+ggplot(data = dat,
+       aes(y = yield, x = variety)) +
+  geom_point() +
+  ylim(0, NA) +
   theme_classic()
 ```
 
-#### Fitting ANOVA Models with R
+### Fitting ANOVA Models with R
 
 We fit a linear model with yield as the response variable and variety as the fixed effect. The goal is to determine if there is a difference in yield between varieties and where those differences are. This should be familiar from the previous lesson as a One-Way ANOVA.
 
 ```{r}
-mod<-lm(yield~variety,data=dat)
+mod <- lm(yield ~ variety, data = dat)
 summary(mod)
 ```
 
 The Anova function produces the table of F-Statistics to determine if there significant differences among the different levels of the varieties tested. Given there is only one term in the model type 1 and 2 would produce the same results and type 3 is inappropriate without an interaction term (produces the same values regardless).
 
 ```{r}
-mod %>% car::Anova(type=2)
-epsilon<-residuals(mod)
+mod %>% car::Anova(type = 2)
+epsilon <- residuals(mod)
 ```
 
 Here we report the numerator and denominator degrees of freedom, the F value, and the p value: F(3,20)=23.418, p value < 0.0001). Remember that this test only tells us that there is a significant difference among the levels of the categorical variable. It doesn’t say which levels are significantly different.
 
-#### Assumptions
+### Assumptions
 
 We show the qqnorm and residuals vs fitted plots and the formal statistical tests.
 
@@ -138,103 +130,93 @@ We show the qqnorm and residuals vs fitted plots and the formal statistical test
 qqnorm(epsilon)
 qqline(epsilon)
 
-plot(residuals(mod)~fitted(mod))
-abline(h=0)
+plot(residuals(mod) ~ fitted(mod))
+abline(h = 0)
 
 autoplot(mod)
 
 shapiro.test(epsilon)
 
-car::leveneTest(yield~variety,dat,center=mean)
+car::leveneTest(yield ~ variety, dat, center = mean)
 ```
 
 The results of the figures and tests indicate that the model assumptions are met.
 
-#### Mean Comparisons
+### Mean Comparisons
 
 Following a significant F-test, we use the emmeans function to produce the estimated marginal means and the multiple comparisons tests using the cld function. Tukey is a commonly used method - the default setting so no code is required.
 
 ```{r}
-mean_comparisons_tukey<-mod%>%
-  emmeans(specs="variety")%>%
-  cld(Letters=letters)
+mean_comparisons_tukey <- mod %>%
+  emmeans(specs = "variety") %>%
+  cld(Letters = letters)
 mean_comparisons_tukey
 ```
 
-#### Data Visualization
+### Data Visualization
 
 Create a plot that displays both the raw data and results from the multiple comparisons tests of the adjusted means from the linear model.
 
 ```{r}
-CRD_Plot_tukey<-ggplot() +
+CRD_Plot_tukey <- ggplot() +
   # black dots representing the raw data
-  geom_point(data=dat,aes(y=yield,x=variety))+
+  geom_point(data = dat, aes(y = yield, x = variety)) +
   # red dots representing the adjusted means
-  geom_point(data=mean_comparisons_tukey,aes(y=emmean,x=variety),color="red",position=position_nudge(x=0.1))+
+  geom_point(data = mean_comparisons_tukey, aes(y = emmean, x = variety), color = "red", position = position_nudge(x = 0.1)) +
   # red error bars representing the confidence limits of the adjusted means
-  geom_errorbar(data = mean_comparisons_tukey,aes(ymin=lower.CL,ymax=upper.CL,x=variety),color="red",width=0.1,
-                position=position_nudge(x=0.1))+
+  geom_errorbar(data = mean_comparisons_tukey, aes(ymin = lower.CL, ymax = upper.CL, x = variety), color = "red", width = 0.1,  position = position_nudge(x = 0.1)) +
   # red letters 
-  geom_text(data=mean_comparisons_tukey,aes(y=emmean,x=variety,label=str_trim(.group)),color="red",
-            position=position_nudge(x=0.2),hjust=0)+ 
-  ylim(0, NA)+ # force y-axis to start at 0
-  ylab("Yield in t/ha")+ # label y-axis
-  xlab("Variety")+      # label x-axis
-  labs(caption="Black dots represent raw data
+  geom_text(data = mean_comparisons_tukey, aes(y = emmean, x = variety, label = str_trim(.group)), color = "red", position = position_nudge(x = 0.2), hjust = 0) + 
+  ylim(0, NA) + # force y-axis to start at 0
+  ylab("Yield in t/ha") + # label y-axis
+  xlab("Variety") +      # label x-axis
+  labs(caption = "Black dots represent raw data
        Red dots and error bars represent adjusted mean with 95% confidence limits per variety
-       Means followed by a common letter are not significantly different according to the Tukey-test")+
+       Means followed by a common letter are not significantly different according to the Tukey-test") +
   theme_classic() # clearer plot format 
 CRD_Plot_tukey
 ```
 
 We have been adding a couple of helpful details for figures using ggplot. We can offset the position of the raw data and the means with confidence intervals using the position_nudge argument. When showing the text of the cld results, the str_trim argument removes the blank space around the letters. The ylim function allows us to force the y-axis to start at values we set. In the labs function we can create a caption that defaults to the bottom of the figure.
 
-#### Clear R's working memory
-
-```{r}
-rm(list=ls())
-dev.off()
-```
-
-# Randomized Compelte Block Design
+## Randomized Compelte Block Design
 
 When dealing with an experiment in the field there is often unexplained variation in the physical space that may impact the measurements of the dependent variable. This unexplained variation is usually not desirable but a nuisance that can obscure the relationship of interest. Thankfully there is an approach where we can easily account for this unexplained variation to better isolate the relationship of interest. Portions of the physical space (e.g., field) can be sectioned into blocks along a theorized gradient (e.g., elevation, disturbance, locations, etc.) of this unexplained variation. The measurements collected from the different blocks can be recognized in the model so that this portion of unexplained variation is measured and the relationship of interest can be more accurately estimated.
 
-#### Review the Experimental Design
+### Review the Experimental Design
 
 Data published from (Gomez & Gomez 1984) include trials of yield from four different rice genotypes and six nitrogen levels (24 treatment level combinations) with three complete blocks (rep). The allocation of the treatments (varieties) to the experimental units (plots) follow a Randomized Complete Block Design (RCBD).
 
-#### Importing the Data
+### Importing the Data
 
 See the "tidy" format
 
 ```{r}
-dataURL <- "https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Randomized_Complete_Block_Design.csv"
-dat <- read.csv(dataURL)
+dat <- read_csv(here("data", "Randomized_Complete_Block_Design.csv"))
 ```
 
-#### Data Description
+### Data Description
 
 The variables rep, N, and G needs to be encoded as a factor instead of the character variable R uses as a default. The mutate_at function changes the selected variable (rep, N, or G) to the chosen variable type (as.factor).
 
 ```{r}
 dat <- dat %>%
-  mutate_at(vars(rep, N, G),as.factor)
+  mutate_at(vars(rep, N, G), as.factor)
 str(dat)
 ```
 
-#### Exploring the Data
+### Exploring the Data
 
 We now produce a field layout of the trial using the desplot() function just like in the CRD above. Notice how the nitrogen and genotype treatments are randomly assigned within each rep (block). Each level of nitrogen and genotype are represented within each block (complete).
 
 ```{r}
-desplot(data=dat,
-        form=rep~col+row|rep, #fill color per rep, headers per rep
-        text=G,cex=1,shorten="no", #show genotype names per plot
-        col=N, #color of genotype names for each N-level
-        out1=col,out1.gpar=list(col="darkgrey"), #lines between columns
-        out2=row,out2.gpar=list(col="darkgrey"), #lines between rows
-                main="Field Layout",show.key=T,key.cex = 0.7) #formatting
+desplot(data = dat,
+        form = rep ~ col + row | rep, # fill color per rep, headers per rep
+        text = G, cex = 1, shorten = "no", # show genotype names per plot
+        col = N, # color of genotype names for each N-level
+        out1 = col, out1.gpar = list(col = "darkgrey"), # lines between columns
+        out2 = row,out2.gpar = list(col = "darkgrey"), # lines between rows
+                main = "Field Layout", show.key = T, key.cex = 0.7) # formatting
 ```
 
 We can also look at the arithmetic means and standard deviations for each genotype and nitrogen levels separately, but also their combinations. You can also arrange the tibble based on decreasing mean values
@@ -242,61 +224,61 @@ We can also look at the arithmetic means and standard deviations for each genoty
 ```{r}
 dat %>%
   group_by(G) %>%
-  dplyr::summarize(mean=mean(yield),
-            std.dev=sd(yield))%>%
+  dplyr::summarize(mean = mean(yield),
+            std.dev = sd(yield)) %>%
   arrange(desc(mean))
 
-dat%>%
-  group_by(N)%>%
-  dplyr::summarize(mean=mean(yield),
-            std.dev=sd(yield))%>%
+dat %>%
+  group_by(N) %>%
+  dplyr::summarize(mean = mean(yield),
+            std.dev = sd(yield)) %>%
   arrange(desc(mean))
 
-dat%>%
-  group_by(N,G)%>%
-  dplyr::summarize(mean=mean(yield),
-            std.dev=sd(yield))%>%
-  arrange(desc(mean))%>%
-  print(n=Inf) #show more than default 10 rows
+dat %>%
+  group_by(N, G) %>%
+  dplyr::summarize(mean = mean(yield),
+            std.dev = sd(yield)) %>%
+  arrange(desc(mean)) %>%
+  print(n = Inf) #show more than default 10 rows
 ```
 
 A simple plot of the raw data also helps to visualize the distribution of the yield for each genotype nitrogen treatment combination. Remember the point geometry produces a scatter plot. The ylim argument forced the y-axis to start at 0. The theme_classic argument produces a clearer plot format. The facet_wrap function produces a figure for each level of the genotype.
 
 ```{r}
-ggplot(data=dat,
-       aes(y=yield,x=N,color=N))+ #different colors for the level of nitrogen
-  facet_wrap(~G,labeller=label_both)+ #facet per G level
-  geom_point()+
-  scale_y_continuous(limits=c(0,NA), #make y=axis start at 0
-                     expand=expansion(mult=c(0,0.1))#no space below 0 on the y-axis
-                     )+
-  scale_x_discrete(name=NULL)+ #x-axis with no name label
-  theme_bw()+ #alternative plot theme with more grid lines - personal preference for theme_classic
+ggplot(data = dat,
+       aes(y = yield, x = N, color = N)) + # different colors for the level of nitrogen
+  facet_wrap(~ G, labeller = label_both) + # facet per G level
+  geom_point() +
+  scale_y_continuous(limits = c(0, NA), # make y=axis start at 0
+                     expand = expansion(mult = c(0, 0.1)) # no space below 0 on the y-axis
+                     ) +
+  scale_x_discrete(name = NULL) + # x-axis with no name label
+  theme_bw() + # alternative plot theme with more grid lines - personal preference for theme_classic
   theme(legend.position = "bottom") # legend on bottom
 ```
 
-#### Fitting ANOVA Models with R
+### Fitting ANOVA Models with R
 
 We fit a linear model with yield as the response variable and genotype, nitrogen level, and their interaction as the fixed effects. Additionally there needs to be a term to represent the blocks from the experimental design. The decision to model block as a fixed or random effect should be considered carefully. We will discuss this decision further in the Mixed Effects Models lecture, but for now we are going to present the fixed effects results only.
 
 ```{r}
-mod_fe<-lm(yield~N*G+rep,data=dat)
+mod_fe <- lm(yield ~ N * G + rep, data = dat)
 summary(mod_fe)
-car::Anova(mod_fe,type=3)
+car::Anova(mod_fe, type = 3)
 
-epsilon<-residuals(mod_fe) #used to test model assumptions
+epsilon <- residuals(mod_fe) #used to test model assumptions
 ```
 
 We see a significant interaction effect between nitrogen and genotype so we won't be testing the main effects independently. Also the rep (block) effect isn't significant.
 
-#### Assumptions
+### Assumptions
 
 ```{r}
 qqnorm(epsilon)
 qqline(epsilon)
 
-plot(residuals(mod_fe)~fitted(mod_fe))
-abline(h=0)
+plot(residuals(mod_fe) ~ fitted(mod_fe))
+abline(h = 0)
 
 autoplot(mod_fe)
 
@@ -307,88 +289,74 @@ car::ncvTest(mod_fe) #homoscedasticity test for more complex models - AKA Breusc
 
 Results indicate the satisfaction of linear model assumptions, so we can move onto multiple comparisons tests.
 
-#### Mean Comparisons
+### Mean Comparisons
 
 Following a significant F-test, we can compare the variety means. We will show within pairwise comparisons using the pipe between the two factors.
 
 ```{r}
-withinG_mean_comparisons_tukey_fe<-mod_fe%>%
-  emmeans(specs=~N|G)%>%
-  cld(Letters=letters) #the default p-value adjustment is Tukey-HSD
+withinG_mean_comparisons_tukey_fe <- mod_fe %>%
+  emmeans(specs = ~ N | G) %>%
+  cld(Letters = letters) # the default p-value adjustment is Tukey-HSD
 withinG_mean_comparisons_tukey_fe
 ```
 
-#### Data Visualizaiton
+### Data Visualizaiton
 
 Create a plot that displays both the raw data and results from the multiple comparisons tests of the adjusted means from the linear model.
 
 ```{r}
-withinG_RCBD_Plot_tukey<-ggplot() +
-  facet_wrap(~G,labeller=label_both)+ #facet per G level
-  geom_point(data=dat,aes(y=yield,x=N,color=N))+# dots representing the raw data
-  geom_point(data=withinG_mean_comparisons_tukey_fe,aes(y=emmean,x=N),color="red",position=position_nudge(x=0.1))+# red dots representing the adjusted means
-  geom_errorbar(data=withinG_mean_comparisons_tukey_fe,aes(ymin=lower.CL,ymax=upper.CL,x=N),color="red",width=0.1,position=position_nudge(x=0.1))+# red error bars representing the confidence limits of the adjusted means
-  geom_text(data=withinG_mean_comparisons_tukey_fe,aes(y=emmean,x=N,label=str_trim(.group)),color="red",
-            position=position_nudge(x=0.2),hjust=0)+ # red letters 
-  scale_y_continuous(name="Yield",limits=c(0,NA),expand=expansion(mult=c(0,0.1)))+
-  scale_x_discrete(name=NULL)+
-  theme_classic()+ # clearer plot format 
-labs(caption=str_wrap("Black dots represent raw data. Red dots and error bars represent estimated marginal means ± 95% confidence interval per group. Means not sharing any letter are significantly different by the t-test at the 5% level of significance.", width = 120))+
-  theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1),legend.position="bottom")
+withinG_RCBD_Plot_tukey <- ggplot() +
+  facet_wrap(~ G, labeller = label_both) + # facet per G level
+  geom_point(data = dat, aes(y = yield, x = N, color = N)) + # dots representing the raw data
+  geom_point(data = withinG_mean_comparisons_tukey_fe, aes(y = emmean, x = N), color = "red", position = position_nudge(x = 0.1)) + # red dots representing the adjusted means
+  geom_errorbar(data = withinG_mean_comparisons_tukey_fe, aes(ymin = lower.CL, ymax = upper.CL, x = N), color = "red", width = 0.1, position = position_nudge(x = 0.1)) + # red error bars representing the confidence limits of the adjusted means
+  geom_text(data = withinG_mean_comparisons_tukey_fe, aes(y = emmean, x = N, label = str_trim(.group)), color = "red", position = position_nudge(x = 0.2), hjust = 0) + # red letters 
+  scale_y_continuous(name = "Yield", limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+  scale_x_discrete(name = NULL) +
+  theme_classic() + # clearer plot format 
+labs(caption = str_wrap("Black dots represent raw data. Red dots and error bars represent estimated marginal means ± 95% confidence interval per group. Means not sharing any letter are significantly different by the t-test at the 5% level of significance.", width = 120)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1), legend.position = "bottom")
 withinG_RCBD_Plot_tukey
 ```
 
-#### Clear R's working memory
-
-```{r}
-rm(list=ls())
-dev.off()
-```
-
-# Latin Square Design
+## Latin Square Design
 
 When the experimental design is arranged in a grid or matrix with the same number of rows and columns. Each treatment combination appears exactly once in every row and column. This allows for the control of unexplained variation in two directions (i.e., along the rows and columns). 
 
-#### Review the Experiemental Design
+### Review the Experiemental Design
 
 Data published from (Bridges 1989) include trials of yield from four different cucumber varieties with four rows and columns. The allocation of the treatments (varieties) to the experimental units (plots) was completely at random along the rows and columns - following a latin square design (LSD). We are reviewing the data collected from one of the two locations.
 
-#### Importing the Data
+### Importing the Data
 
 First we need to import the data into R Studio using a URL.
 
 ```{r}
-dataURL <- "https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Latin_Square_Design.csv"
-dat <- read.csv(dataURL)
-
-dat <- dat %>% 
+dat <- read_csv(here("data", "Latin_Square_Design.csv")) %>% 
   filter(loc == "Clemson") %>% # subset data from only one location
-  select(-loc) # remove loc column which is now unnecessary
+  select(-loc) %>% # remove loc column which is now unnecessary
+  mutate(rowF = as.factor(row),
+         colF = as.factor(col),
+         gen = as.factor(gen))
 dat
+str(dat)
 ```
 
-#### Data Description
+### Data Description
 
 The column gen is already coded as a factor, but the row and col columns need to be encoded as a factor instead of the integer variable R uses as a default. The mutate function changes the selected variable (variety) to the chosen variable type (as.factor) to create copies of the row and col variables as an integer for the desplot function.
 
-```{r}
-dat <- dat %>%
-  mutate(rowF=row%>%as.factor,
-         colF=col%>%as.factor)
-dat$gen<-as.factor(dat$gen)
-```
-
-#### Exploring the Data
+### Exploring the Data
 
 We produce a field layout of the trial using the desplot() function. The data object needs to have columns that identify the row and column of each plot in the trial. 
 
 ```{r}
-desplot(data=dat,flip=TRUE,
-        form=gen~row+col,
-        out1=row,out1.gpar=list(col="black",lwd=3),
-        out2=col,out2.gpar=list(col="black",lwd=3),
-        text=gen,cex=1,shorten="no",
-        main="Field Layout",show.key=F)
+desplot(data = dat, flip = TRUE,
+        form = gen ~ row + col,
+        out1 = row, out1.gpar = list(col = "black", lwd = 3),
+        out2 = col, out2.gpar = list(col = "black", lwd = 3),
+        text = gen, cex = 1, shorten = "no",
+        main = "Field Layout", show.key = F)
 ```
 
 It is also a good idea to look at the arithmetic means and standard deviations for each genotype row and column
@@ -396,40 +364,40 @@ It is also a good idea to look at the arithmetic means and standard deviations f
 ```{r}
 dat %>%
   group_by(gen) %>%
-  summarize(mean=mean(yield),
-            std.dev=sd(yield))
-dat%>%
-  group_by(row)%>%
-  summarize(mean=mean(yield),
-            std.dev=sd(yield))
-dat%>%
-  group_by(col)%>%
-  summarize(mean=mean(yield),
-            std.dev=sd(yield))
+  summarize(mean = mean(yield),
+            std.dev = sd(yield))
+dat %>%
+  group_by(row) %>%
+  summarize(mean = mean(yield),
+            std.dev = sd(yield))
+dat %>%
+  group_by(col) %>%
+  summarize(mean = mean(yield),
+            std.dev = sd(yield))
 ```
 
 A simple plot of the raw data also helps to visualize the distribution of the yield for each genotype The point geometry produces a scatter plot with different shapes for the columns and colors for the rows. The ylim argument forced the y-axis to start at 0. The theme_classic argument produces a clearer plot format.
 
 ```{r}
-ggplot(data=dat,aes(y=yield,x=gen,color=rowF,shape=colF))+
-  geom_point(size=2)+ #scatter plot with larger points
-  ylim(0,NA)+
+ggplot(data = dat, aes(y = yield,x = gen, color = rowF, shape = colF)) +
+  geom_point(size = 2) + #scatter plot with larger points
+  ylim(0, NA) +
   theme_classic()
 ```
 
-####Fitting ANOVA Models with R
+### Fitting ANOVA Models with R
 
 We fit a linear model with yield as the response variable and genotype as the fixed effect. The goal is to determine if there is a difference in yield between varieties and where those differences are. The row and column variables can be treated as either fixed or random effects, but we will be treating them as fixed effects for this example.
 
 ```{r}
-mod_fe<-lm(yield~gen+rowF+colF,data=dat)
+mod_fe <- lm(yield ~ gen + rowF + colF, data = dat)
 
-mod_fe %>% car::Anova(type=2)
+mod_fe %>% car::Anova(type = 2)
 
-epsilon<-residuals(mod_fe) #used to test model assumptions
+epsilon <- residuals(mod_fe) #used to test model assumptions
 ```
 
-#### Assumptions
+### Assumptions
 
 We show the qqnorm and residuals vs fitted plots and the formal statistical tests.
 
@@ -437,69 +405,60 @@ We show the qqnorm and residuals vs fitted plots and the formal statistical test
 qqnorm(epsilon)
 qqline(epsilon)
 
-plot(residuals(mod_fe)~fitted(mod_fe))
-abline(h=0)
+plot(residuals(mod_fe) ~ fitted(mod_fe))
+abline(h = 0)
 
 autoplot(mod_fe)
 
 shapiro.test(epsilon)
 
-car::leveneTest(yield~gen,dat,center=mean)
+car::leveneTest(yield ~ gen, dat, center = mean)
 ```
 
 Results indicate the satisfaction of linear model assumptions, so we can move onto multiple comparisons tests.
 
-#### Mean Comparisons
+### Mean Comparisons
 
 Following a significant F-test, we can compare the genotype means.
 
 ```{r}
-mean_comparisons_tukey_fe<-mod_fe%>%
-  emmeans(specs=~gen)%>%
-  cld(Letters=letters) #the default p-value adjustment is Tukey-HSD
+mean_comparisons_tukey_fe <- mod_fe %>%
+  emmeans(specs = ~ gen) %>%
+  cld(Letters = letters) #the default p-value adjustment is Tukey-HSD
 mean_comparisons_tukey_fe
 ```
 
-#### Data Visualization
+### Data Visualization
 
 Create a plot that displays both the raw data and results from the multiple comparisons tests of the adjusted means from the linear model.
 
 ```{r}
-CRD_Plot_tukey_fe<-ggplot() +
+CRD_Plot_tukey_fe <- ggplot() +
   # black dots representing the raw data
-  geom_point(data=dat,aes(y=yield,x=gen))+
+  geom_point(data = dat, aes(y = yield, x = gen)) +
   # red dots representing the adjusted means
-  geom_point(data=mean_comparisons_tukey_fe,aes(y=emmean,x=gen),color="red",position=position_nudge(x=0.1))+
+  geom_point(data = mean_comparisons_tukey_fe, aes(y = emmean, x = gen), color = "red", position = position_nudge(x = 0.1)) +
   # red error bars representing the confidence limits of the adjusted means
-  geom_errorbar(data = mean_comparisons_tukey_fe,aes(ymin=lower.CL,ymax=upper.CL,x=gen),color="red",width=0.1,
-                position=position_nudge(x=0.1))+
+  geom_errorbar(data = mean_comparisons_tukey_fe, aes(ymin = lower.CL, ymax = upper.CL, x = gen), color = "red", width = 0.1, position = position_nudge(x = 0.1)) +
   # red letters 
-  geom_text(data=mean_comparisons_tukey_fe,aes(y=emmean,x=gen,label=str_trim(.group)),color="red",
-            position=position_nudge(x=0.2),hjust=0)+ 
-  ylim(0, NA)+ # force y-axis to start at 0
-  ylab("Yield in t/ha")+ # label y-axis
-  xlab("Variety")+      # label x-axis
-  labs(caption="Black dots represent raw data
+  geom_text(data = mean_comparisons_tukey_fe, aes(y = emmean, x = gen, label = str_trim(.group)), color = "red", position = position_nudge(x = 0.2), hjust = 0) + 
+  ylim(0, NA) + # force y-axis to start at 0
+  ylab("Yield in t/ha") + # label y-axis
+  xlab("Variety") +      # label x-axis
+  labs(caption = "Black dots represent raw data
        Red dots and error bars represent adjusted mean with 95% confidence limits per variety
-       Means followed by a common letter are not significantly different according to the Tukey-test")+
+       Means followed by a common letter are not significantly different according to the Tukey-test") +
   theme_classic() # clearer plot format 
 CRD_Plot_tukey_fe
 ```
 
-#### Clear R's working memory
-
-```{r}
-rm(list=ls())
-dev.off()
-```
-
-# Practice Example 
+## Practice Example 
 
 We are going to reuse the example from the latin square design example but incorporate both locations to represent the combined randomized complete block design and latin square design. Make sure to address the format of variables used in the experimental design. Treat the block (location), row, and column factors as fixed effects.
 
 ```{r}
-dataURL <- "https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Latin_Square_Design.csv"
-dat <- read.csv(dataURL)
+dat <- read_csv(here("data", "Latin_Square_Design.csv"))
+
 str(dat)
 ```
 
