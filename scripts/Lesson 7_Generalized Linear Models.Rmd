@@ -2,8 +2,6 @@
 title: "Generalized Linear Models"
 author: "Conor Fair"
 date: "2025-10-7"
-# Modifications to YAML - "Yet Another Markdown Language"
-# Specify output formats and options for each document type (e.g., PDF, MS Word, HTML)
 output:
   html_document:                           # Options for HTML output
     theme: flatly                           # Sets a Bootstrap theme for HTML
@@ -16,19 +14,14 @@ output:
     df_print: kable                         # Print data frames nicely using knitr::kable
     code_folding: show                      # Allow code chunks to be hidden or shown interactively
     highlight: tango                        # Syntax highlighting style for code
-
   word_document:                            # Options for Word output
     fig_caption: true                       # Include figure captions
-
   pdf_document:                             # Options for PDF output
     fig_caption: true                       # Include figure captions
     toc: true                               # Include a table of contents
     number_sections: true                   # Automatically number sections
-
 fontsize: 11pt                              # Sets the base font size in PDF output
 geometry: margin=1in                         # Sets page margins for PDF
-
-# Editor options in RStudio
 editor_options: 
   chunk_output_type: console                 # Show code chunk output in the console by default
   markdown: 
@@ -41,46 +34,46 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, include=FALSE}
 #Necessary Libraries
-pacman::p_load(agridat,tidyverse,dplyr,car, # data import and handling
+pacman::p_load(agridat, tidyverse, dplyr, here, car, # data import and handling
                conflicted, # handling function conflicts
-               emmeans,multcomp,multcompView, # adjusted mean comparisons
-               ggplot2,ggpp,desplot,gridExtra,ggfortify,viridis, # plots
+               emmeans, multcomp, multcompView, # adjusted mean comparisons
+               ggplot2, ggpp, desplot, gridExtra, ggfortify, viridis, # plots
                performance) #Others
 
 # conflicts: identical function names from different packages
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
-conflict_prefer("summarize","dplyr")
+conflict_prefer("summarize", "dplyr")
 options(scipen=999)
 ```
 
 # Generalized Linear Models
 Generalized linear models (GLMs) are a class of linear-based regression models developed to handle varying types of error distributions (other than normally (Gaussian) distributed). Common examples include responses that are binary (e.g., 0 and 1), or count data that are discrete values (integers) and never negative. While data transformations prior to fitting a model can be done, it may be difficult to properly meet model assumptions. We will show examples of how to perform data transformations as well as appropriate GLMs based on data properties.
 
-#### One-Way ANOVA with non-normal data
+## One-Way ANOVA with non-normal data
 We will first analyze data that came from a trail of different insecticide applications and the resultant number of insects. The four sprays A, B, C, and F are the focus of this analysis and are filtered from the original dataset. We will approach this analysis just as we had done with the ANOVA lecture.
 
 ```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Count_Model.csv"
-Count_Data<-read.csv(x)
+Count_Data <- read_csv(here("data", "Count_Model.csv"))
 
-Count_Data<-Count_Data%>%filter(spray=='A'|spray=='B'|spray=='C'|spray=='F')%>%
+Count_Data <- Count_Data %>% 
+  filter(spray == 'A' | spray == 'B' | spray == 'C' | spray == 'F') %>%
   droplevels()
 
-Count_Data$spray<-as.factor(Count_Data$spray)
+Count_Data$spray <- as.factor(Count_Data$spray)
 ```
 
-#### Data Visualization
+### Data Visualization
 It is always a good idea to visualize the data prior to the analysis. We are comparing the count of insects among the different treatment types. We are looking for a treatment that has the fewest number of insects observed, which would indicate the most effective treatment.
 
 ```{r}
-ggplot(Count_Data,aes(x=spray,y=count))+
-  geom_boxplot(outlier.shape=NA,width=0.5)+
-  geom_jitter(height=0,width=0.1,size=3,pch=21)+
-  labs(x="Spray Treatment Type",y="Count")+
-  theme_classic()+
-  theme(axis.title=element_text(face="bold",size=15),
-        axis.text=element_text(face="bold",size=15))
+ggplot(Count_Data, aes(x = spray, y = count)) +
+  geom_boxplot(outlier.shape = NA, width = 0.5) +
+  geom_jitter(height = 0, width = 0.1, size = 3, pch = 21) +
+  labs(x = "Spray Treatment Type", y = "Count") +
+  theme_classic() +
+  theme(axis.title = element_text(face = "bold", size = 15),
+        axis.text = element_text(face = "bold", size = 15))
 
 hist(Count_Data$count)
 ```
@@ -90,44 +83,42 @@ When we work with certain types of data - count data in this instance - the line
 First we will fit a linear model with the non-normal data to show the distribution of the residuals.
 
 ```{r}
-lm1<-lm(count~spray,data=Count_Data)
-Anova(lm1,type=2) #Appropriate since there is no interaction effect
+lm1 <- lm(count ~ spray, data = Count_Data)
+Anova(lm1, type = 2) # Appropriate since there is no interaction effect
 
-
-hist(resid(lm1)) #distribution should be symmetrical around zero
-
+hist(resid(lm1)) # distribution should be symmetrical around zero
 autoplot(lm1)
 
-plot(resid(lm1)~fitted(lm1))+ #funnel shapes or curvature are signs of heteroskedasticity or trend in residuals
-abline(h=0)
+plot(resid(lm1) ~ fitted(lm1)) + # funnel shapes or curvature are signs of heteroskedasticity or trend in residuals
+abline(h = 0)
 
-qqPlot(resid(lm1)) #residuals should line up close to the blue line
+qqPlot(resid(lm1)) # residuals should line up close to the blue line
 qqnorm(resid(lm1))
 qqline(resid(lm1))
 
 shapiro.test(resid(lm1))
 
+boxplot(resid(lm1) ~ Count_Data$spray) # variances should be homogeneous for each group
 
-boxplot(resid(lm1)~Count_Data$spray) #variances should be homogeneous for each group
-
-car::leveneTest(resid(lm1)~spray,data=Count_Data)
+car::leveneTest(resid(lm1) ~ spray, data = Count_Data)
 ```
 
 The variation between each spray treatment is not the same based on the boxplot, and it almost fails to meet the homogeneity of variance assumption. Generally not the worst example of count data failing to meet the normally distributed residuals assumption. We will move forward with the other modeling approaches to illustrate the lesson.
 
-#### Log-linear Model
+## Log-linear Model
+
 To model the effect of different sprays on insect counts that more closely meets the normally distributed residuals assumption using log-linear model by using the natural log-transformation on the response data (count). You need to add some small value to the variable before the natural log-transformation because log(0) is undefined. You could add any small constant but +1 is convenient because zeros go back to zero after the transformation.
 
 ```{r}
-lm2<-lm(log(count+1)~spray,data=Count_Data)
-Anova(lm2,type=2)
+lm2 <- lm(log(count + 1) ~ spray, data = Count_Data)
+Anova(lm2, type = 2)
 
 hist(resid(lm2))
 
 autoplot(lm2)
 
-plot(resid(lm2)~fitted(lm2))+
-  abline(h=0)
+plot(resid(lm2) ~ fitted(lm2)) +
+  abline(h = 0)
 
 qqPlot(resid(lm2))
 qqnorm(resid(lm2))
@@ -136,21 +127,22 @@ qqline(resid(lm2))
 shapiro.test(resid(lm2))
 
 
-boxplot(resid(lm2)~Count_Data$spray)
-car::leveneTest(resid(lm2)~spray,data=Count_Data)
+boxplot(resid(lm2) ~ Count_Data$spray)
+car::leveneTest(resid(lm2) ~ spray, data = Count_Data)
 ```
 
 The transformation makes the homogeneity of the residuals a little more  consistent across treatment types according to the boxplot but fails the levene Test while passing the shapiro test for normally distributed residuals. Another step to complete the lesson.
 
-#### Generalized Linear Model (GLM)
+## Generalized Linear Model (GLM)
+
 A generalized linear model works similarly to the traditional linear model we have been covering where we estimate the relationship between the explanatory variables and the response variables, but the new element to the model is known as the link function. This link function allows the residuals from the model to follow a different distribution (e.g., binomial, Poisson, etc.), which modifies the model assumptions. There is specific syntax used in the model functions to reflect the appropriate link function based on the type of data analyzed. For this example - we have count data - the Poisson distribution is often what is tested first in a generalized linear model.
 
 Now we will use GLMs to examine the effect of the different sprays on the counts of insects. The glm() function is a general function that fits a generalized linear model by specifying the 'family' (error distribution). The default setting is 'Gaussian' distribution (normal). 
 
 ```{r}
-glm1<-glm(count~spray,data=Count_Data,family=poisson(link="log"))
-Anova(glm1,type=2)
-Anova(glm1,type=2,test.statistic = "F")
+glm1 <- glm(count ~ spray, data = Count_Data, family = poisson(link = "log"))
+Anova(glm1, type = 2)
+Anova(glm1, type = 2, test.statistic = "F")
 ```
 
 For GLMs, Anova returns a likelihood ratio test with a chi-square value. You can get an F-statistics by using a different function to fit the glm. However, the Wald Chisquare test tells you the same information that the F-test does in this scenario - there is significant variation among the different levels of spray.
@@ -163,7 +155,7 @@ summary(lm2)
 summary(glm1)
 ```
 
-#### Assumptions
+### Assumptions
 When fitting a generalized linear model we assume a different distribution of the residuals other than normally distributed. We don't need to bother with the shapiro or levene test. We do need to review the autoplot functions to ensure the independence of the residuals - look for trend in residuals.
 
 ```{r}
@@ -174,70 +166,70 @@ autoplot(glm1)
 
 The results from the assessment of the residuals for the generalized linear model are better than the one-way ANOVA and the log-transformed count data. This is a better approach to model this type of data.
 
-#### Compare marginal means for different models
+### Compare marginal means for different models
 
 We compare the emmeans among the different spray treatments for each of the linear models (un-transformed, log-transformed, and Poisson).
 
 ```{r}
-emmeans(lm1,~spray)
-emmeans(lm2,~spray,type='response') #type argument helps to back transform the values on the original scale
-emmeans(glm1,~spray,type='response')
+emmeans(lm1, ~ spray)
+emmeans(lm2, ~ spray, type = 'response') # type argument helps to back transform the values on the original scale
+emmeans(glm1, ~ spray, type = 'response')
 ```
 
-#### Multiple Comparisons
+### Multiple Comparisons
 
 Familiar code to create the results for the multiple comparisons tests.
 
 ```{r}
-emmeans1<-lm1%>%
-  emmeans(specs="spray")%>%
-  cld(adjust="none",Letters=letters)
+emmeans1 <- lm1 %>%
+  emmeans(specs = "spray") %>%
+  cld(adjust = "none", Letters = letters)
 emmeans1
 
-emmeans2<-lm2%>%
-  emmeans(specs="spray",type="response")%>%
-  cld(adjust="none",Letters=letters)
+emmeans2 <- lm2 %>%
+  emmeans(specs = "spray", type = "response") %>%
+  cld(adjust = "none", Letters = letters)
 emmeans2
 
-emmeans3<-glm1%>%
-  emmeans(specs="spray",type="response")%>%
-  cld(Letters=letters)
+emmeans3 <- glm1 %>%
+  emmeans(specs = "spray", type = "response") %>%
+  cld(Letters = letters)
 emmeans3
 
-emmeans3_diff<-glm1%>%
-  emmeans(specs="spray",type="response")%>%
-  cld(adjust="none",Letters=letters,details=T)
+emmeans3_diff <- glm1 %>%
+  emmeans(specs = "spray", type = "response") %>%
+  cld(adjust = "none", Letters = letters, details = T)
 emmeans3_diff
 ```
 
 If you wanted to know the exact difference between the average count for the different treatment levels, you can call for the details in the cld function. We see the difference between the F and C treatment is 8 insects on average.
 
-#### Data Visualization
+### Data Visualization
 
 ```{r}
-emmeans1<-emmeans1%>%
+emmeans1 <- emmeans1 %>%
   as_tibble()
 
-emmeans3<-emmeans3%>%
+emmeans3 <- emmeans3 %>%
   as_tibble()
 
-Plot_lm1<-ggplot() +
-  geom_point(data=Count_Data,aes(y=count,x=spray),position=position_jitter(width=0.1))+ #dots representing the raw data
-  geom_boxplot(data=Count_Data,aes(y=count,x=spray),position=position_nudge(x=-0.25),width=0.25,outlier.shape=NA)+#boxplot
-  geom_point(data=emmeans1,aes(y=emmean,x=spray),position=position_nudge(x=0.15),size=2,color="red")+# red dots representing the adjusted means
-  geom_errorbar(data = emmeans1,aes(ymin=lower.CL,ymax=upper.CL,x=spray),position=position_nudge(x=0.15),color="red",width=0.1)+# red error bars representing the confidence limits of the adjusted means
-  geom_text(data=emmeans1,aes(y=emmean,x=spray,label=str_trim(.group)),position=position_nudge(x=0.25),color="black",angle=0)+ # red letters 
-  labs(y="Counts",x="Treatment")+
+Plot_lm1 <- ggplot() +
+  geom_point(data = Count_Data, aes(y = count, x = spray), position = position_jitter(width = 0.1)) + # dots representing the raw data
+  geom_boxplot(data = Count_Data, aes(y = count, x = spray), position = position_nudge(x = -0.25), width = 0.25, outlier.shape = NA) + # boxplot
+  geom_point(data = emmeans1, aes(y = emmean, x = spray), position = position_nudge(x = 0.15), size = 2, color = "red") + # red dots representing the adjusted means
+  geom_errorbar(data = emmeans1, aes(ymin = lower.CL, ymax = upper.CL, x = spray), position = position_nudge(x = 0.15), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
+  geom_text(data = emmeans1, aes(y = emmean, x = spray, label = str_trim(.group)), position = position_nudge(x = 0.25), color = "black", angle = 0) + # red letters 
+  labs(y = "Counts", x = "Treatment") +
   theme_classic()
 Plot_lm1
 
-Plot_glm1<-ggplot() +
-  geom_point(data=Count_Data,aes(y=count,x=spray),position=position_jitter(width=0.1))+ #dots representing the raw data
-  geom_boxplot(data=Count_Data,aes(y=count,x=spray),position=position_nudge(x=-0.25),width=0.25,outlier.shape=NA)+#boxplot
-  geom_point(data=emmeans3,aes(y=rate,x=spray),position=position_nudge(x=0.15),size=2,color="red")+# red dots representing the adjusted means
-  geom_errorbar(data = emmeans3,aes(ymin=asymp.LCL,ymax=asymp.UCL,x=spray),position=position_nudge(x=0.15),color="red",width=0.1)+# red error bars representing the confidence limits of the adjusted means
-  geom_text(data=emmeans3,aes(y=rate,x=spray,label=str_trim(.group)),position=position_nudge(x=0.25),color="black",angle=0)+ # red letters 
-  labs(y="Counts",x="Treatment")+
+Plot_glm1 <- ggplot() +
+  geom_point(data = Count_Data, aes(y = count, x = spray), position = position_jitter(width = 0.1)) + # dots representing the raw data
+  geom_boxplot(data = Count_Data, aes(y = count, x = spray), position = position_nudge(x = -0.25), width = 0.25, outlier.shape = NA) + # boxplot
+  geom_point(data = emmeans3, aes(y = rate, x = spray), position = position_nudge(x = 0.15), size = 2, color = "red") + # red dots representing the adjusted means
+  geom_errorbar(data = emmeans3, aes(ymin = asymp.LCL, ymax = asymp.UCL, x = spray), position = position_nudge(x = 0.15), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
+  geom_text(data = emmeans3, aes(y = rate, x = spray, label = str_trim(.group)), position = position_nudge(x = 0.25), color = "black", angle = 0) + # red letters 
+  labs(y = "Counts", x = "Treatment") +
   theme_classic()
 Plot_glm1
 ```
@@ -246,52 +238,42 @@ We can interpret the results from the analysis similarly between the linear mode
 
 We can see that the C spray treatment had the lowest number of insects compared to each other treatment. The difference was between ~ 7 to 8 insects fewer. 
 
-#### Clear R's working memory
-
-It is good practice to remove any objects in R's working memory before moving onto another analysis. The dev.off code clears the plots in the Plots window.
-
-```{r}
-rm(list=ls())
-dev.off()
-```
-
-# Overdispersion
+## Overdispersion
 
 The Poisson distribution is a unique distribution that is often used to model count data. There are specific conditions that describe the Poisson distribution that don't always hold for count data - the assumption is that the mean and variance are equal. When the variance of the data is larger than the mean of the data the data are said to follow a negative binomial distribution. We have to determine if the variance is greater than the mean enough to determine if we should fit the model using a Poisson distribution or a negative binomial distribution. We will review the steps to assess these characteristics of count data.
 
 The general approach is to fit a model with the Poisson distribution and check for overdispersion and then fit the Negative Binomial distribution for models with overdispersion.
 
-#### Review the Data
+### Review the Data
 
 ```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Overdispersion.csv"
-data<-read.csv(x)
+data<-read_csv(here("data","Overdispersion.csv"))
 
 head(data)
 ```
 
-#### Examine the Data
+### Examine the Data
 
 ```{r}
-ggplot(data,aes(x=spray,y=y,fill=lead))+
-  geom_violin(scale="width",adjust=2)+ #produces the violin geometry that shows the distribution of the data
-  geom_point(position=position_jitterdodge(jitter.width=0.5, #jitters the horizontal positioning of the data
-                                           jitter.height=0.1, #jitters the vertical positioning of the data - not always advised
-                                           dodge.width=1), #shifts the horizontal grouping of the data
-             alpha=0.3)+
-  theme_classic(base_size=14) #changes the size of text over all the plot
+ggplot(data, aes(x = spray, y = y, fill = lead)) +
+  geom_violin(scale = "width", adjust = 2) + # produces the violin geometry that shows the distribution of the data
+  geom_point(position = position_jitterdodge(jitter.width = 0.5, # jitters the horizontal positioning of the data
+                                             jitter.height = 0.1, # jitters the vertical positioning of the data - not always advised
+                                             dodge.width = 1), # shifts the horizontal grouping of the data
+             alpha = 0.3) +
+  theme_classic(base_size = 14) # changes the size of text over all the plot
 ```
 
-#### Fitting the Model
+### Fitting the Model
 
 ```{r}
-mod1<-glm(y~spray*lead,data=data,family="poisson")
+mod1 <- glm(y ~ spray * lead, data = data, family = "poisson")
 
 summary(mod1)
-Anova(mod1,type=3,test.statistic = "F") #type 3 sums of squares needed for interaction
+Anova(mod1, type = 3, test.statistic = "F") # type 3 sums of squares needed for interaction
 ```
 
-#### Check for Overdispersion
+### Check for Overdispersion
 
 ```{r}
 check_overdispersion(mod1)
@@ -299,22 +281,22 @@ check_overdispersion(mod1)
 
 A significant result p-value < 0.05 suggests evidence of overdispersion. 
 
-#### Fit Model with Negative Binomial Distribution
+### Fit Model with Negative Binomial Distribution
 
 ```{r}
-mod2<-glm.nb(y~spray*lead,data=data)
-Anova(mod2,type=3,test.statistic = "F")
+mod2 <- glm.nb(y ~ spray * lead, data = data)
+Anova(mod2, type = 3, test.statistic = "F")
 ```
 
-#### Assumptions
+### Assumptions
 
 Other methods to compare residuals for poisson and negative binomial models include functions from the DHARMa package.
 
 ```{r}
 #install.packages("DHARMa")
 library(DHARMa)
-simulateResiduals(mod1,plot=T)
-simulateResiduals(mod2,plot=T)
+simulateResiduals(mod1,plot = T)
+simulateResiduals(mod2,plot = T)
 
 autoplot(mod2) 
 ```
@@ -323,31 +305,31 @@ No sign of dependency in the Residuals vs Fitted plot - not unusual to see non-n
 
 Results from model suggest that the interaction effect isn't significant, but we can confirm with multiple comparisons tests.
 
-#### Multiple Comparisons
+### Multiple Comparisons
 
 Familiar code to create the results for the multiple comparisons tests.
 
 ```{r}
-all_means<-mod2%>%
-  emmeans(~spray:lead)%>%
-  cld(Letters=letters,type="response",details=F)
+all_means <- mod2 %>%
+  emmeans(~ spray:lead) %>%
+  cld(Letters = letters, type = "response", details = F)
 all_means
 ```
 
-#### Data Visualization
+### Data Visualization
 
 ```{r}
-all_means<-all_means%>%
+all_means <- all_means %>%
   as_tibble()
 
-Plot_NB<-ggplot() +
-  geom_point(data=data,aes(y=y,x=spray),position=position_jitter(width=0.1))+ #dots representing the raw data
-  facet_wrap(~lead)+
-  geom_boxplot(data=data,aes(y=y,x=spray),position=position_nudge(x=-0.25),width=0.25,outlier.shape=NA)+#boxplot
-  geom_point(data=all_means,aes(y=response,x=spray),position=position_nudge(x=0.15),size=2,color="red")+# red dots representing the adjusted means
-  geom_errorbar(data = all_means,aes(ymin=asymp.LCL,ymax=asymp.UCL,x=spray),position=position_nudge(x=0.15),color="red",width=0.1)+# red error bars representing the confidence limits of the adjusted means
-  geom_text(data=all_means,aes(y=response,x=spray,label=str_trim(.group)),position=position_nudge(x=0.25),color="black",angle=0)+ # red letters 
-  labs(y="Counts",x="Spray Treatment")+
+Plot_NB <- ggplot() +
+  geom_point(data = data, aes(y = y,x = spray),position = position_jitter(width = 0.1)) + # dots representing the raw data
+  facet_wrap(~ lead) +
+  geom_boxplot(data = data, aes(y = y, x = spray), position = position_nudge(x = -0.25), width = 0.25, outlier.shape = NA) + # boxplot
+  geom_point(data = all_means, aes(y = response, x = spray), position = position_nudge(x = 0.15), size = 2, color = "red") + # red dots representing the adjusted means
+  geom_errorbar(data = all_means, aes(ymin = asymp.LCL, ymax = asymp.UCL, x = spray), position = position_nudge(x = 0.15), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
+  geom_text(data = all_means, aes(y = response, x = spray, label = str_trim(.group)), position = position_nudge(x = 0.25), color = "black", angle = 0) + # red letters 
+  labs(y = "Counts", x = "Spray Treatment") +
   theme_classic()
 Plot_NB
 ```
@@ -356,147 +338,124 @@ While the ANOVA test showed marginally significant interaction effect, the post-
 
 The spray treatments had lower insect counts but also the lead treatment had lower counts without the spray treatment. There was no difference between the counts in the spray treatments with or without the lead treatment.
 
-#### Note about Zero-Inflated Models
+### Note about Zero-Inflated Models
 
 There are instances where count data will have excessive zeros where the poisson or negative binomial models will produce biased results. If you believe that your data might have an excess number of zeros, I would suggest you look into zero-inflated or hurdle models. These models require careful consideration about the context of the "zero" observations. We won't be covering this topic further, but if you have questions about it please feel free to email us.
 
-#### Clear R's working memory
-
-It is good practice to remove any objects in R's working memory before moving onto another analysis. The dev.off code clears the plots in the Plots window.
-
-```{r}
-rm(list=ls())
-dev.off()
-```
-
-# Binomial Distribution
+## Binomial Distribution
 
 For data that follow a binomial error distribution often have a binomial or dichotomous response. The example dataset follows the study of 800 observations among two pepper fields documenting the presence or absence of Phytophera disease. The response variable is the presence or absence of the disease, and the independent variables are field and soil moisture percent we will be reviewing to determine if they impact the probability of the disease being observed.
 
 ```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Logistic_Regressionl.csv"
-data<-read.csv(x)
+data <- read_csv(here("data","Logistic_Regressionl.csv"))
 
 head(data)
-data$field<-as.factor(data$field)
+data$field <- as.factor(data$field)
 ```
 
 With logistic regression, it can be more difficult to interpret the coefficients, so a visual representation of the trends can be easier to understand. In order to do that we need to create a new variable that is 0 or 1 instead of "Y" or "N".
 
 ```{r}
-data$disease_num<-if_else(data$disease=="Y",1,0)
+data$disease_num <- if_else(data$disease == "Y", 1, 0)
 ```
 
-#### Data Visualization
+### Data Visualization
 
 We can look at the presence of the disease across both fields.
 
 ```{r}
-ggplot(data,aes(x=field,y=disease))+
-  geom_jitter(height=0.2,width=0.2)
+ggplot(data, aes(x = field, y = disease)) +
+  geom_jitter(height = 0.2, width = 0.2)
 ```
 
-#### Fitting the Model and Model Assumptions
+### Fitting the Model and Model Assumptions
 
 ```{r}
-mod1<-glm(disease_num~field,data=data,family=binomial(link="logit"))
-car::Anova(mod1,type=2,test.statistic = "F") #No interaction so type two is OK
+mod1 <- glm(disease_num ~ field, data = data, family = binomial(link = "logit"))
+car::Anova(mod1, type = 2, test.statistic = "F") # No interaction so type two is OK
 summary(mod1)
 
 plot(simulateResiduals(mod1))
 
-autoplot(mod1) #Not too informative for this type of model - just make sure that the type of data matches the binomial regression (e.g., presence/absence).
+autoplot(mod1) # Not too informative for this type of model - just make sure that the type of data matches the binomial regression (e.g., presence/absence).
 
-#Note about separation issue where one level of variable only has 1's or 0's.
+# Note about separation issue where one level of variable only has 1's or 0's.
 ```
 
-#### Look at Estimated Marginal Means
+### Look at Estimated Marginal Means
 
 ```{r}
-means<-mod1%>%
-  emmeans(pairwise~field,type="response")%>% #the response scale will be the probability of disease presence
-    cld(Letters=letters)
+means <- mod1 %>%
+  emmeans(pairwise ~ field, type = "response") %>% # the response scale will be the probability of disease presence
+    cld(Letters = letters)
 means
 ```
 
 The non-significant result suggests that the presence of the disease is not different between the two fields.
 
-#### Visualize the Results
+### Visualize the Results
 
 ```{r}
 library(ggpp)
-ggplot(data,aes(x=field,y=disease_num))+
-  geom_jitter(height = 0.01)+
-  geom_errorbar(data=means,
-                aes(x=field,y=prob,ymin=(prob-SE),ymax=(prob+SE)), 
-                width=.1,lwd=1,position=position_dodge(width=0.5)) +
-  geom_point(data=means,aes(x=field,y=prob), 
-             size=2,position=position_dodge(width=0.5)) +
-    geom_text(data=means,aes(y=prob,x=field,label=str_trim(.group)),color="black",
-            position=position_dodgenudge(width=1.2,x=-0.15),hjust=0,angle=0)+ 
+ggplot(data, aes(x = field, y = disease_num)) +
+  geom_jitter(height = 0.01) +
+  geom_errorbar(data = means,
+                aes(x = field, y = prob, ymin = (prob - SE), ymax = (prob + SE)), 
+                width = 0.1, lwd = 1, position = position_dodge(width = 0.5)) +
+  geom_point(data = means, aes(x = field, y = prob), 
+             size = 2, position = position_dodge(width = 0.5)) +
+    geom_text(data = means, aes(y = prob, x = field, label = str_trim(.group)), color = "black", position = position_dodgenudge(width = 1.2, x = -0.15), hjust = 0, angle = 0) + 
   theme_classic()
 ```
 
 There are no differences in disease prevalence between fields, but there are other variables to consider with this dataset. The other variable of interest includes the soil moisture percent as a potential covariate.
 
 ```{r}
-ggplot(data,aes(x=water,y=disease,color=field))+
+ggplot(data, aes(x = water, y = disease, color = field)) +
   geom_jitter(height = 0.2)
 ```
 
-#### Fitting the Model and Model Assumptions
+### Fitting the Model and Model Assumptions
 
 ```{r}
-mod1<-glm(disease_num~field*water,data=data,family=binomial(link="logit"))
-car::Anova(mod1,type=3,test.statistic = "F") 
+mod1 <- glm(disease_num ~ field * water, data = data, family = binomial(link = "logit"))
+car::Anova(mod1, type = 3, test.statistic = "F") 
 summary(mod1)
 
 #Model Assumptions
-
 plot(simulateResiduals(mod1))
-
 ```
 
-#### Look at Estimated Marginal Means
+### Look at Estimated Marginal Means
 
 ```{r}
-trends<-mod1%>%
-  emtrends(pairwise~field,var="water")%>%
-    cld(Letters=letters)
+trends <- mod1 %>%
+  emtrends(pairwise ~ field, var = "water") %>%
+    cld(Letters = letters)
 trends
-#emtrends function used to compare the slopes of the lines between the two fields.
+# emtrends function used to compare the slopes of the lines between the two fields.
 ```
 
 The significant result suggests that the trend line is different between the two fields. With logistic regression, it can be more difficult to interpret the coefficients, so a visual representation of the trends can be easier to understand. 
 
-#### Visualize the Results
+### Visualize the Results
 
 ```{r}
-ggplot(data,aes(x=water,y=disease_num,color=field))+
-  geom_jitter(height = 0.01)+
-  geom_smooth(method="glm",
-              method.args=list(family="binomial"),
-              formula=y~x,se=T,lwd=1.5)+
-  labs(y="Probability of Disease",x="Soil Moisture %")+
+ggplot(data, aes(x = water, y = disease_num, color = field)) +
+  geom_jitter(height = 0.01) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"),
+              formula = y ~ x, se = T, lwd = 1.5) +
+  labs(y = "Probability of Disease", x = "Soil Moisture %") +
   theme_classic()
 ```
 
 For field 1 there is a gradual trend describing the increase in probability of observing the disease as soil moisture % increases. For field 2 there is a more rapid increase in probability of observing the disease where the probability quickly increases to almost 100% between 10 and 15 % of soil moisture.
 
-#### Clear R's working memory
-
-It is good practice to remove any objects in R's working memory before moving onto another analysis. The dev.off code clears the plots in the Plots window.
-
-```{r}
-rm(list=ls())
-dev.off()
-```
-
-#### Note about Ordered Logistic Regression
+### Note about Ordered Logistic Regression
 
 Logistic regression can be further complicated when the response variable is coded as either multinomial (many categories) or ordinal (discrete categories along a continuum). You would use the polr() function from the MASS package to estimate the ordered logistic regression model. The function name comes from the proportional odds logistic regression, which hints at the proportional odds assumption (a.k.a. parallel regression assumption) of the model. We won't be covering this topic further, but if you have questions about it please feel free to email us.
 
-# Practice Example 
+## Practice Example 
 We are going to revisit the mead.lamb (Mead et al. 2002) data to use as practice. We can upload the data from the agridat package.
 
 
@@ -505,46 +464,44 @@ library(agridat)
 data(mead.lamb)
 dat <- mead.lamb
 
-#Farm: three locations
-#Breed: three breeds of lamb
-#Lamb Class: four levels of class (number of live lambs per birth)
-#Y: count of ewes in class
+# Farm: three locations
+# Breed: three breeds of lamb
+# Lamb Class: four levels of class (number of live lambs per birth)
+# Y: count of ewes in class
 
-#Model specification steps
+# Model specification steps
 
-mod1<-glm(y~farm*breed*lambclass,data=dat,family=poisson)
-mod2<-glm(y~farm*breed+breed*lambclass+farm*lambclass,data=dat,family=poisson)
-mod3<-glm(y~farm*breed+breed*lambclass,data=dat,family=poisson)
-mod4<-glm(y~farm*breed+farm*lambclass,data=dat,family=poisson)
-mod5<-glm(y~farm*breed+lambclass,data=dat,family=poisson)
-mod6<-glm(y~farm+breed+lambclass,data=dat,family=poisson)
-mod7<-glm(y~farm*breed,data=dat,family=poisson)
+mod1 <- glm(y ~ farm * breed * lambclass, data = dat, family = poisson)
+mod2 <- glm(y ~ farm*breed + breed * lambclass + farm * lambclass, data = dat, family = poisson)
+mod3 <- glm(y ~ farm * breed + breed * lambclass, data = dat, family = poisson)
+mod4 <- glm(y ~ farm * breed + farm * lambclass, data = dat, family = poisson)
+mod5 <- glm(y ~ farm * breed + lambclass, data = dat, family = poisson)
+mod6 <- glm(y ~ farm + breed + lambclass, data = dat, family = poisson)
+mod7 <- glm(y ~ farm * breed, data = dat, family = poisson)
 
-AIC(mod1,mod2,mod3,mod4,mod5,mod6,mod7)
-#Model 4 is the best model given it's lowest AIC value
-#Should also use theory to drive what terms should be in the model and what hypotheses you want to test
+AIC(mod1, mod2, mod3, mod4, mod5, mod6, mod7)
+# Model 4 is the best model given it's lowest AIC value
+# Should also use theory to drive what terms should be in the model and what hypotheses you want to test
 
-#Check for overdispersion and look at the residual plots
-#Then complete the multiple comparisons tests - show all pairwise comparisons for both interactions (e.g., farm:lambclass, and farm:breed)
-#Finally make a pair of figures that shows the results and the interpretation of the statistical analyses
+# Check for overdispersion and look at the residual plots
+# Then complete the multiple comparisons tests - show all pairwise comparisons for both interactions (e.g., farm:lambclass, and farm:breed)
+# Finally make a pair of figures that shows the results and the interpretation of the statistical analyses
 
 check_overdispersion(mod4)
-simulateResiduals(mod4,plot=T)
+simulateResiduals(mod4, plot = T)
 
-mod4.nb<-glm.nb(y~farm*breed+farm*lambclass,data=dat)
+mod4.nb <- glm.nb(y ~ farm * breed + farm * lambclass, data = dat)
 
-anova(mod4,mod4.nb)
-AIC(mod4,mod4.nb)
+anova(mod4, mod4.nb)
+AIC(mod4, mod4.nb)
 
-all_means_FB<-mod4%>%
-  emmeans(~farm:breed)%>%
-  cld(Letters=letters,type="response")
+all_means_FB <- mod4 %>%
+  emmeans(~ farm:breed) %>%
+  cld(Letters = letters, type = "response")
 all_means_FB
 
-all_means_FL<-mod4%>%
-  emmeans(~farm:lambclass)%>%
-  cld(Letters=letters,type="response")
+all_means_FL <- mod4 %>%
+  emmeans(~ farm:lambclass) %>%
+  cld(Letters = letters, type = "response")
 all_means_FL
-
 ```
-

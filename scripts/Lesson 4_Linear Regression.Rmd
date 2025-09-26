@@ -1,9 +1,7 @@
 ---
 title: "Linear Regression"
-author: "Conor Fair"
+author: "Conor Fair^[Statistical consultant, cfair13@uga.edu]"
 date: "2025-10-2"
-# Modifications to YAML - "Yet Another Markdown Language"
-# Specify output formats and options for each document type (e.g., PDF, MS Word, HTML)
 output:
   html_document:                           # Options for HTML output
     theme: flatly                           # Sets a Bootstrap theme for HTML
@@ -16,19 +14,14 @@ output:
     df_print: kable                         # Print data frames nicely using knitr::kable
     code_folding: show                      # Allow code chunks to be hidden or shown interactively
     highlight: tango                        # Syntax highlighting style for code
-
   word_document:                            # Options for Word output
     fig_caption: true                       # Include figure captions
-
   pdf_document:                             # Options for PDF output
     fig_caption: true                       # Include figure captions
     toc: true                               # Include a table of contents
     number_sections: true                   # Automatically number sections
-
 fontsize: 11pt                              # Sets the base font size in PDF output
 geometry: margin=1in                         # Sets page margins for PDF
-
-# Editor options in RStudio
 editor_options: 
   chunk_output_type: console                 # Show code chunk output in the console by default
   markdown: 
@@ -39,10 +32,19 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, include=FALSE}
+```{r Read Libraries, include=FALSE}
 #Necessary Libraries
-library(dplyr); library(emmeans);library(ggplot2);library(ggpp);
-library(multcomp);library(multcompView);library(forcats);library(stringr)
+pacman::p_load(agridat, tidyverse, readr, here, # data import and handling
+               conflicted, # handling function conflicts
+               emmeans, multcomp, multcompView, # adjusted mean comparisons
+               lme4, #liner modeling
+               ggpp, desplot, gridExtra, ggfortify, # plots
+               forcats, stringr, performance, DHARMa) # others
+
+# conflicts: identical function names from different packages
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("summarize", "dplyr")
 ```
 
 # Linear Regression
@@ -63,9 +65,8 @@ Sixteen uniform pots were prepared and sown with *Solanum nigrum*. When the plan
 #### Importing the Data
 When organizing data (commonly in an excel file) note that the dataset is in a "tidy" format, with one row per observation and one column per variable. This is known as the long format and is what most functions expect to be used in R. Other data formats might be useful for some visualizations, but the data can be transformed into other formats when necessary.
 
-```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/One_Way_ANOVA.csv"
-One_Way_Anova<-read.csv(x)
+```{r Importing One-Way ANOVA Data}
+One_Way_Anova <- read_csv(here("data", "One_Way_ANOVA.csv"))
 ```
 
 #### Data Description
@@ -73,9 +74,9 @@ The summary function of the data object produces summary statistics of each vari
 
 ```{r}
 summary(One_Way_Anova)
-treatMeans<-tapply(One_Way_Anova$Weight,One_Way_Anova$Treat,mean)
-SDs<-tapply(One_Way_Anova$Weight,One_Way_Anova$Treat,sd)
-descrit<-data.frame(treatMeans,SDs)
+treatMeans <- tapply(One_Way_Anova$Weight, One_Way_Anova$Treat, mean)
+SDs <- tapply(One_Way_Anova$Weight, One_Way_Anova$Treat, sd)
+descrit <- data.frame(treatMeans, SDs)
 descrit
 ```
 
@@ -84,11 +85,11 @@ Fitting a linear model with weight as the response variable and the factor of Tr
 
 ```{r}
 str(One_Way_Anova)
-mod<-lm(Weight~factor(Treat),data=One_Way_Anova)
+mod <- lm(Weight ~ factor(Treat), data = One_Way_Anova)
 
-One_Way_Anova$Treat<-factor(One_Way_Anova$Treat)
+One_Way_Anova$Treat <- factor(One_Way_Anova$Treat)
 str(One_Way_Anova)
-mod<-lm(Weight~Treat,data=One_Way_Anova)
+mod <- lm(Weight ~ Treat, data = One_Way_Anova)
 ```
 
 Following the linear model being fit, you can call the parameter estimates using the summary function. You can see the call which shows the terms included in the model, the summary statistics of the residuals, a table of coefficients, and some other statistical results. This summary output is less useful for ANOVA, but we will revisit this output for linear regression.
@@ -100,8 +101,8 @@ summary(mod)
 After fitting a model the values you are most interested in reviewing are the fitted values and the residuals, which can be extracted using the fitted() and residuals() functions. The fitted values are the same as the means calculated above. The residuals are the deviation each observation is away from the mean value, and will be used for later steps.
 
 ```{r}
-expected<-fitted(mod) #Not too useful but included here to show how to extract these values
-epsilon<-residuals(mod)
+expected <- fitted(mod) #Not too useful but included here to show how to extract these values
+epsilon <- residuals(mod)
 ```
 
 The ANOVA table is commonly obtained using one of two methods from either the stats or car package. Certain model types we use in future more complicated models may prefer one over the other. There may be some guidance we can provide, but other situations may require some troubleshooting. It will be helpful to remember these options.
@@ -126,9 +127,9 @@ To assess the normality of errors (residuals) we often use a QQ (quantile-quanti
 qqnorm(epsilon)
 qqline(epsilon)
 
-ggplot()+
-  geom_qq(aes(sample=rstandard(mod)))+
-  geom_abline(color="red")+
+ggplot() +
+  geom_qq(aes(sample=rstandard(mod))) +
+  geom_abline(color="red") +
   theme_classic()
 ```
 
@@ -137,14 +138,13 @@ The goal is to observe the points fall along the line as close as possible. Some
 To assess homoskedasticity we look at the plot of the residuals against the fitted values. If the assumption of no systematic error and homogeneous errors is met, then the residuals should be randomly scattered without any visible systematic patterns. We can look for potential outliers, funnel-like patter suggesting heteroscedasticity, or a positive/negative trend in the residuals over the fitted values.
 
 ```{r}
-plot(residuals(mod)~fitted(mod))
-abline(h=0)
+plot(residuals(mod) ~ fitted(mod))
+abline(h = 0)
 ```
 
 Alternatively you can use the autoplot function from the ggfortify package to look at a comprehensive output and review the assumptions.
 
 ```{r}
-library(ggfortify)
 autoplot(mod)
 ```
 
@@ -157,15 +157,15 @@ shapiro.test(epsilon)
 A formal hypothesis used to test the linear model assumptions for homogeneity of variance is the Levene's test on the independent variables in the model. The null hypothesis is that the variance across all samples are equal. A significant result p value < 0.05 indicates there is one sample with a different variance. This is a useful test when you have a categorical independent variable where the residuals vs fitted plot would be more useful for a model with only continuous variables.
 
 ```{r}
-car::leveneTest(Weight~Treat,One_Way_Anova,center=mean)
+car::leveneTest(Weight ~ Treat, One_Way_Anova, center = mean)
 ```
 
 #### Expected Marginal Means
 The expected marginal means will produce the arithmetic means when the experiment is balanced (same number of replicates within each group), but the means will be different when the experiment is unbalanced. We will use the emmeans() function to produce the expected marginal means (also known as least squares means). 
 
 ```{r}
-mu_j<-mod%>%
-  emmeans(~Treat)
+mu_j <- mod %>%
+  emmeans( ~ Treat)
 mu_j
 ```
 
@@ -177,33 +177,33 @@ Two general approaches for multiple comparisons tests include linear contrasts a
 Linear contrasts are a linear combination of means (model parameters) that add up to zero. One example from the herbicide treatments would be to compare the three herbicide treatments to the control 1/3+1/3+1/3-1=0 Each level of the treatment variable are given a constant that informs what levels are being compared. Here the average of the three treatments are being compared to the control. You can test multiple types of contrasts, but the constants have to sum to zero - this is known as orthogonal contrasts.
 
 ```{r}
-cont1<-c(1/3,1/3,1/3,-1) #the average of the first three levels compared to the fourth
-cont2<-c(1/2,-1,1/2,0) #the average of the first and third level compared to the second
-cont3<-c(0,-1,1,0) #the second level compared to the third
-cont4<-c(1,-1,0,0) #the first level compared to the second
-contrasts<-list(cont1,cont2,cont3,cont4)
-contrast(mu_j,method=contrasts,adjust="none") #emmeans from expected marginal means
+cont1 <- c(1/3, 1/3, 1/3, -1) #the average of the first three levels compared to the fourth
+cont2 <- c(1/2, -1, 1/2, 0) #the average of the first and third level compared to the second
+cont3 <- c(0, -1, 1, 0) #the second level compared to the third
+cont4 <- c(1, -1, 0, 0) #the first level compared to the second
+contrasts <- list(cont1, cont2, cont3, cont4)
+contrast(mu_j, method = contrasts, adjust = "none") #emmeans from expected marginal means
 ```
 
 The pairwise comparisons are more commonly used (sometimes overused) and follow two general approaches: 1) all pairwise comparisons, and comparisons with a control (Dunnett's method). All pairwise comparisons will yield a large number of contrasts, and some might not be of primary interest based on the hypothesis. Carefully consider these steps within the context of your data and hypotheses. Furthermore, the "dunnett" method defaults to comparing each level to the first level in alphabetical order, which may not be the control level. You can call the levels of the treatment variable from the dataset object and find that the fourth level is the control.
 
 ```{r}
-contrast(mu_j,adjust="none",method="pairwise")
+contrast(mu_j, adjust = "none", method = "pairwise")
 levels(One_Way_Anova$Treat)
-contrast(mu_j,adjust="none",method="dunnett",ref=4)
+contrast(mu_j, adjust = "none", method = "dunnett", ref = 4)
 ```
 
 With a large number of contrasts it can be impractical to report the effect size of all comparisons. The cld (compact letter display) function helps to visualize the differences between the treatment levels. You can produce either lowercase letters (letters) or uppercase letters (LETTERS). You can also have the letters follow increasing or decreasing emmean values. Be mindful that the letter display doesn't inform anything about the direction and size of the differences, which is it's chief criticism in their use to present experimental results. This criticism can be alleviated when the letters are showed along side the raw data.
 
 ```{r}
-mu_j<-mod%>%
-  emmeans(specs="Treat")%>%
-  cld(adjust="none",Letters=letters)
+mu_j <- mod %>%
+  emmeans(specs = "Treat") %>%
+  cld(adjust = "none", Letters = letters)
 mu_j
 
-mu_j_reversed<-mod%>%
-  emmeans(specs="Treat")%>%
-  cld(adjust="none",Letters=letters,reversed = TRUE)
+mu_j_reversed <- mod %>%
+  emmeans(specs = "Treat") %>%
+  cld(adjust = "none", Letters = letters, reversed = TRUE)
 mu_j_reversed
 ```
 
@@ -212,27 +212,27 @@ In experiments that have a high number of contrasts or simultaneously tested hyp
 Other approaches make adjustments to the p values and the confidence intervals of the pairwise comparisons. The Sidak method is one approach that can be used with the following argument - adjust="sidak".
 
 ```{r}
-mu_j<-mod%>%
-  emmeans(specs="Treat")%>%
-  cld(adjust="sidak",Letters=letters)
+mu_j <- mod %>%
+  emmeans(specs = "Treat") %>%
+  cld(adjust = "sidak", Letters = letters)
 mu_j
 ```
 
 Another example is the Bonferroni correction is simpler adjustment procedure and more commonly used. 
 
 ```{r}
-mu_j<-mod%>%
-  emmeans(specs="Treat")%>%
-  cld(adjust="bonferroni",Letters=letters)
+mu_j <- mod %>%
+  emmeans(specs = "Treat") %>%
+  cld(adjust = "bonferroni", Letters = letters)
 mu_j
 ```
 
 The last multiplicity adjustment we will discuss is the option I most commonly see: Tukey's HSD. This option is the default method - we just remove the adjust argument. All three are seen as conservative adjustments. You can also see the individual comparisons by including details=TRUE option.
 
 ```{r}
-mu_j<-mod%>%
-  emmeans(specs="Treat")%>%
-  cld(Letters=letters,details=F)
+mu_j<-mod %>%
+  emmeans(specs = "Treat") %>%
+  cld(Letters = letters, details = F)
 mu_j
 ```
 
@@ -241,14 +241,14 @@ We can use the results of the multiple comparisons test to help answer our hypot
 #### Data Visualization
 
 ```{r}
-mu_j<-mu_j%>%
+mu_j <- mu_j %>%
   as_tibble()
 
-Plot_means_tukey<-ggplot() +
-  geom_point(data=One_Way_Anova,aes(y=Weight,x=Treat),position=position_jitter(width=0.1))+ #dots representing the raw data
-  geom_boxplot(data=One_Way_Anova,aes(y=Weight,x=Treat),position=position_nudge(x=-0.25),width=0.25,outlier.shape=NA)+#boxplot
-  geom_point(data=mu_j,aes(y=emmean,x=Treat),position=position_nudge(x=0.15),size=2,color="red")+# red dots representing the adjusted means
-  geom_errorbar(data = mu_j,aes(ymin=lower.CL,ymax=upper.CL,x=Treat),position=position_nudge(x=0.15),color="red",width=0.1)+# red error bars representing the confidence limits of the adjusted means
+Plot_means_tukey <- ggplot() +
+  geom_point(data = One_Way_Anova, aes(y = Weight, x = Treat), position = position_jitter(width = 0.1)) + #dots representing the raw data
+  geom_boxplot(data = One_Way_Anova, aes(y = Weight, x = Treat), position = position_nudge(x = -0.25), width = 0.25, outlier.shape = NA) + #boxplot
+  geom_point(data = mu_j, aes(y = emmean, x = Treat), position = position_nudge(x = 0.15), size = 2, color = "red") + # red dots representing the adjusted means
+  geom_errorbar(data = mu_j, aes(ymin = lower.CL, ymax = upper.CL, x = Treat), position = position_nudge(x = 0.15), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
   geom_text(data=mu_j,aes(y=emmean,x=Treat,label=str_trim(.group)),position=position_nudge(x=0.25),color="black",angle=0)+ # red letters 
   labs(y="Weed Weight (g)",x="Treatment")+
   theme_classic()
@@ -256,15 +256,6 @@ Plot_means_tukey
 ```
 
 All treatments are better than the control (i.e., unweeded). Mixture_378 is a better treatment than Rimsulfuron_30, and Metribuzin_348 is no better than either of the treatments.
-
-#### Clear R's Working Memory
-
-It is good practice to remove any objects in R's working memory before moving onto another analysis. The dev.off code clears the plots in the Plots window.
-
-```{r}
-rm(list=ls())
-dev.off()
-```
 
 # Two-Way ANOVA 
 
@@ -281,10 +272,9 @@ These data show the body mass in grams among different penguin species on differ
 Remember the "tidy" format...
 
 ```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Two_Way_ANOVA.csv"
-Two_Way_Anova<-read.csv(x)
+Two_Way_Anova <- read_csv(here("data", "Two_Way_ANOVA.csv"))
 
-Two_Way_Anova<-subset(Two_Way_Anova,!is.na(sex)) #removes NAs within the sex variable
+Two_Way_Anova <- subset(Two_Way_Anova, !is.na(sex)) # removes NAs within the sex variable
 ```
 
 #### Data Description
@@ -295,8 +285,8 @@ The full dataset contains eight variables for 333 penguins (without NAs). Make s
 summary(Two_Way_Anova)
 str(Two_Way_Anova)
 
-Two_Way_Anova$species<-factor(Two_Way_Anova$species)
-Two_Way_Anova$sex<-factor(Two_Way_Anova$sex)
+Two_Way_Anova$species <- factor(Two_Way_Anova$species)
+Two_Way_Anova$sex <- factor(Two_Way_Anova$sex)
 str(Two_Way_Anova)
 ```
 
@@ -321,7 +311,7 @@ Interaction between sex and species:
   H1: there is an interaction between sex and species, meaning that the relationship between species and body mass is different for females than for males
 
 ```{r}
-mod<-lm(body_mass_g~species*sex,data=Two_Way_Anova)
+mod <- lm(body_mass_g ~ species * sex, data = Two_Way_Anova)
 ```
 
 Following the linear model being fit, we call the parameter estimates using the summary function.
@@ -333,17 +323,17 @@ summary(mod)
 And we extract the residuals values.
 
 ```{r}
-epsilon<-residuals(mod)
+epsilon <- residuals(mod)
 ```
 
 In this instance we are testing both species and sex and their interaction so the type III sums of squares is most appropriate. Type I sums of squares tests each factor sequentially, and the type II sums of squares is inappropriate when there is an interaction term.
 
-This link can provide more details for your reference: <https://www.r-bloggers.com/2011/03/anova-–-type-iiiiii-ss-explained/#:~:text=The%20anova%20and%20aov%20functions%20in%20R%20implement%20a%20sequential,levels%20of%20the%20other%20factor.>
+This [link](https://md.psych.bio.uni-goettingen.de/mv/unit/lm_cat/lm_cat_unbal_ss_explained.html) can provide more details for your reference.
 
 ```{r}
 stats::anova(mod) #Presents type I sums of squares
 car::Anova(mod) #Presents type II sums of squares
-car::Anova(mod,type="III")
+car::Anova(mod, type = "III")
 ```
 
 Remember that this test only tells us that there is a significant difference among the levels of the categorical variable. It doesn't say which levels are significantly different.
@@ -359,8 +349,8 @@ qqline(epsilon)
 To assess homoskedasticity we look at the plot of the residuals against the fitted values. 
 
 ```{r}
-plot(residuals(mod)~fitted(mod))
-abline(h=0)
+plot(residuals(mod) ~ fitted(mod))
+abline(h = 0)
 
 autoplot(mod)
 ```
@@ -384,21 +374,21 @@ Results of the above figures and tests indicate that model assumptions have been
 We can call for the emmeans for both main effects and the interaction.
 
 ```{r}
-mu_species<-mod%>%
-  emmeans(~species)%>%
-  as_tibble()%>% #Converts the object to a tibble
+mu_species <- mod %>%
+  emmeans(~ species) %>%
+  as_tibble() %>% #Converts the object to a tibble
   arrange(emmean) #Arranges the emmean values as ascending values
 mu_species
 
-mu_sex<-mod%>%
-  emmeans(~sex)%>%
-  as_tibble()%>%
+mu_sex <- mod %>%
+  emmeans(~ sex) %>%
+  as_tibble() %>%
   arrange(emmean)
 mu_sex
 
-group_by(Two_Way_Anova,species,sex) %>%
-  summarise(mean=round(mean(body_mass_g,na.rm=TRUE)),
-            sd=round(sd(body_mass_g,na.rm=TRUE)))
+group_by(Two_Way_Anova, species, sex) %>%
+  summarise(mean = round(mean(body_mass_g, na.rm = TRUE)),
+            sd = round(sd(body_mass_g, na.rm = TRUE)))
 ```
 
 #### Multiple Comparisons
@@ -408,54 +398,46 @@ Following the evidence to support the linear model meets the assumptions, furthe
 When you have a significant interaction effect you shouldn't analyze the main effects independently since their interpretation is dependent on the other effect. There is another option for multiple comparisons tests when you have multiple factors and interactions. You can either test all pairwise comparisons by using a colon between the two terms, or you can test pairwise comparisons of one effect within the levels of another effect by using a pipe between the two terms. We will show both methods as an example.
 
 ```{r}
-all_means_tukey<-mod%>%
-  emmeans(~species:sex)%>%
-  cld(Letters=letters)
+all_means_tukey <- mod %>%
+  emmeans(~ species : sex) %>%
+  cld(Letters = letters)
 all_means_tukey
 
-within_means_tukey<-mod%>%
-  emmeans(~species|sex)%>%
-  cld(Letters=letters)
+within_means_tukey <- mod %>%
+  emmeans(~ species | sex) %>%
+  cld(Letters = letters)
 within_means_tukey
 ```
 
 #### Data Visualization
 
 ```{r}
-all_means_tukey<-all_means_tukey%>%
+all_means_tukey <- all_means_tukey %>%
   as_tibble() #convert object to tibble so that ggplot can read the details
 
-Plot_all_means_tukey<-ggplot() +
-  geom_point(data=Two_Way_Anova,aes(y=body_mass_g,x=species,color=sex),position = position_dodgenudge(width = 0.9,x=0))+ #dots representing the raw data
-  geom_boxplot(data=Two_Way_Anova,aes(y=body_mass_g,x=species,color=sex),width=0.25,outlier.shape=NA,position=position_dodgenudge(width=0.5,x=0))+#boxplot
-  geom_point(data=all_means_tukey,aes(y=emmean,x=species,group=sex),position=position_dodgenudge(width=0.5,x=0),size=2,color="red")+# red dots representing the adjusted means
-  geom_errorbar(data = all_means_tukey,aes(ymin=lower.CL,ymax=upper.CL,x=species,group=sex),position=position_dodgenudge(width=0.5,x=0),color="red",width=0.1)+# red error bars representing the confidence limits of the adjusted means
-  geom_text(data=all_means_tukey,aes(y=emmean,x=species,group=sex,label=str_trim(.group)),color="black",
-            position=position_dodgenudge(width=1.2,x=-0.025),hjust=0,angle=0)+ # red letters 
-  labs(y="Body Mass (g)",x="Species")+
+Plot_all_means_tukey <- ggplot() +
+  geom_point(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = sex), position = position_dodgenudge(width = 0.9, x = 0)) + #dots representing the raw data
+  geom_boxplot(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = sex), width = 0.25, outlier.shape = NA, position = position_dodgenudge(width = 0.5, x = 0)) + # boxplot
+  geom_point(data = all_means_tukey, aes(y = emmean, x = species, group = sex), position = position_dodgenudge(width = 0.5, x = 0), size = 2, color = "red") + # red dots representing the adjusted means
+  geom_errorbar(data = all_means_tukey, aes(ymin = lower.CL, ymax = upper.CL, x = species, group = sex), position = position_dodgenudge(width = 0.5, x = 0),color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
+  geom_text(data = all_means_tukey, aes(y = emmean, x = species, group = sex, label = str_trim(.group)), color = "black", position = position_dodgenudge(width = 1.2, x = -0.025), hjust = 0, angle = 0) + # red letters 
+  labs(y = "Body Mass (g)", x = "Species") +
   theme_classic()
 Plot_all_means_tukey
 
-within_means_tukey<-within_means_tukey%>%
+within_means_tukey <- within_means_tukey %>%
   as_tibble()
 
-Plot_within_means_tukey<-ggplot() +
-  facet_wrap(~sex,labeller=label_both)+ #facet per sex level
-  geom_point(data=Two_Way_Anova,aes(y=body_mass_g,x=species,color=species))+# dots representing the raw data
-  geom_boxplot(data=Two_Way_Anova,aes(y=body_mass_g,x=species,color=species),width=0.25,outlier.shape=NA,position=position_nudge(x=0.2))+#boxplot
-  geom_point(data=within_means_tukey,aes(y=emmean,x=species),color="red",position=position_nudge(x=0.2))+# red dots representing the adjusted means
-  geom_errorbar(data=within_means_tukey,aes(ymin=lower.CL,ymax=upper.CL,x=species),color="red",width=0.1,position=position_nudge(x=0.2))+# red error bars representing the confidence limits of the adjusted means
-  geom_text(data=within_means_tukey,aes(y=emmean,x=species,label=str_trim(.group)),color="black",position=position_nudge(x=0.4),hjust=0)+ # red letters 
-  labs(y="Body Mass (g)",x="Species")+
+Plot_within_means_tukey <- ggplot() +
+  facet_wrap(~ sex, labeller = label_both) + #facet per sex level
+  geom_point(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = species)) + # dots representing the raw data
+  geom_boxplot(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = species), width = 0.25, outlier.shape = NA, position = position_nudge(x = 0.2)) + # boxplot
+  geom_point(data = within_means_tukey, aes(y = emmean, x = species), color = "red", position = position_nudge(x = 0.2)) + # red dots representing the adjusted means
+  geom_errorbar(data = within_means_tukey, aes(ymin = lower.CL, ymax = upper.CL, x = species), color = "red", width = 0.1, position = position_nudge(x = 0.2)) + # red error bars representing the confidence limits of the adjusted means
+  geom_text(data = within_means_tukey, aes(y = emmean, x = species, label = str_trim(.group)), color = "black", position = position_nudge(x = 0.4), hjust = 0) + # red letters 
+  labs(y = "Body Mass (g)", x = "Species") +
   theme_classic() # clearer plot format 
 Plot_within_means_tukey
-```
-
-#### Clear R's Working Memory
-
-```{r}
-rm(list=ls())
-dev.off()
 ```
 
 # Simple Linear Regression
@@ -469,14 +451,13 @@ Data from (Kniss et al. 2012) shows the sugar yield of sugar beet in response to
 #### Importing the Data
 
 ```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Simple_Linear_Regression.csv"
-Simple_Linear_Regression<-read.csv(x)
+Simple_Linear_Regression <- read_csv(here("data", "Simple_Linear_Regression.csv"))
 ```
 
 #### Fitting Linear Model with R
 
 ```{r}
-mod<-lm(LbsSucA~Density,data=Simple_Linear_Regression)
+mod <- lm(LbsSucA ~ Density, data = Simple_Linear_Regression)
 ```
 
 Following the linear model being fit, you can call the parameter estimates using the summary function.
@@ -492,7 +473,7 @@ The ANOVA table can be used but provides little information here. Furthermore, n
 ```{r}
 stats::anova(mod) #Presents type I sums of squares
 car::Anova(mod) #Presents type II sums of squares
-car::Anova(mod,type="III")
+car::Anova(mod, type = "III")
 ```
 
 #### Assumptions
@@ -503,17 +484,17 @@ To assess the normality of errors (residuals) we use the QQ (quantile-quantile)-
 qqnorm(mod$residuals)
 qqline(mod$residuals)
 
-ggplot()+
-  geom_qq(aes(sample=rstandard(mod)))+
-  geom_abline(color="red")+
+ggplot() +
+  geom_qq(aes(sample=rstandard(mod))) +
+  geom_abline(color = "red") +
   theme_classic()
 ```
 
 To assess homoskedasticity we look at the plot of the residuals against the fitted values.
 
 ```{r}
-plot(residuals(mod)~fitted(mod))
-abline(h=0)
+plot(residuals(mod) ~ fitted(mod))
+abline(h = 0)
 
 autoplot(mod)
 ```
@@ -531,26 +512,19 @@ No need to do a levene test since there is no categorical variable included in t
 This is a simple plot for the simple linear regression model above. There will be more complicated figures and syntax required with more complicated models.
 
 ```{r}
-par(mfrow=c(1,1), mar=c(3.2,3.2,2,.5), mgp=c(2,.7,0)) #Number of rows of figures, the margins of the figure, and margin line for the axis title labels and line
-plot(Simple_Linear_Regression$LbsSucA ~ Simple_Linear_Regression$Density, bty="l", #Y and X variables for the plot and the "L" box type for the plot area
-     ylab="Sugar yield (lbs/A)", xlab="Volunteer corn density (plants/ft row)",
-     main="Lingle, WY 2009", ylim=c(0,10000))
+par(mfrow = c(1, 1), mar = c(3.2, 3.2, 2, 0.5), mgp = c(2, 0.7, 0)) #Number of rows of figures, the margins of the figure, and margin line for the axis title labels and line
+plot(Simple_Linear_Regression$LbsSucA ~ Simple_Linear_Regression$Density, bty = "l", #Y and X variables for the plot and the "L" box type for the plot area
+     ylab = "Sugar yield (lbs/A)", xlab = "Volunteer corn density (plants/ft row)",
+     main = "Lingle, WY 2009", ylim = c(0, 10000))
   abline(mod) # Add the regression line
 # to add the regression equation into the plot:
-  int<-round(summary(mod)$coefficients[[1]]) # get intercept
-  sl<- round(summary(mod)$coefficients[[2]]) # get slope
-  reg.eq<-paste("Y =", int, sl, "* X") # create text regression equation
-  legend("bottomleft",reg.eq, bty="n")
+  int <- round(summary(mod)$coefficients[[1]]) # get intercept
+  sl <- round(summary(mod)$coefficients[[2]]) # get slope
+  reg.eq <- paste("Y =", int, sl, "* X") # create text regression equation
+  legend("bottomleft",reg.eq, bty = "n")
 ```
 
 The results from this model focus on the estimate of the slope (density) which has a negative value. This suggests that as density increases, yield will also decrease.
-
-#### Clear R's Working Memory
-
-```{r}
-rm(list=ls())
-dev.off()
-```
 
 # ANCOVA
 
@@ -565,9 +539,8 @@ By reviewing the data and its characteristics you can confirm the appropriate an
 Remember the "tidy" format...
 
 ```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/ANCOVA.csv"
-ANCOVA<-read.csv(x)
-ANCOVA$loc<-as.factor(ANCOVA$loc)
+ANCOVA <- read_csv(here("data", "ANCOVA.csv")) %>%
+  mutate(loc = as.factor(loc)) # Convert loc to a factor
 ```
 
 #### Data Description
@@ -581,8 +554,8 @@ summary(ANCOVA)
 #### Initial Visualization of the Data
 
 ```{r}
-ggplot(ANCOVA,aes(x=density,y=yield,color=loc))+
-  geom_point()+
+ggplot(ANCOVA, aes(x = density, y = yield, color = loc)) +
+  geom_point() +
   theme_classic()
 ```
 
@@ -609,7 +582,7 @@ Interaction between location and density:
 ```{r}
 str(ANCOVA)
 
-mod<-lm(yield~density*loc,data=ANCOVA)
+mod <- lm(yield ~ density * loc, data = ANCOVA)
 ```
 
 Following the linear model being fit, you can call the parameter estimates using the summary function.
@@ -621,13 +594,13 @@ summary(mod)
 After fitting a model we extract the residuals.
 
 ```{r}
-epsilon<-residuals(mod)
+epsilon <- residuals(mod)
 ```
 
 The ANOVA table needs the type 3 test for the interaction effect
 
 ```{r}
-car::Anova(mod,type="III")
+car::Anova(mod, type = "III")
 ```
 
 The interaction effect isn't significant, but each main effect is. Remember that this test only tells us that there is a significant difference among the levels of the categorical variable. It doesn't say which levels are significantly different.
@@ -640,9 +613,9 @@ Assess the normality of errors (residuals) using a QQ (quantile-quantile)-plot.
 qqnorm(mod$residuals)
 qqline(mod$residuals)
 
-ggplot()+
-  geom_qq(aes(sample=rstandard(mod)))+
-  geom_abline(color="red")+
+ggplot() +
+  geom_qq(aes(sample = rstandard(mod))) +
+  geom_abline(color = "red") +
   theme_classic()
 ```
 
@@ -651,7 +624,7 @@ Some deviation from the line is normal, but look out for strong evidence of a sk
 Then assess homoskedasticity with the plot of the residuals against the fitted values. 
 
 ```{r}
-plot(residuals(mod)~fitted(mod))
+plot(residuals(mod) ~ fitted(mod))
 abline(h=0)
 
 autoplot(mod)
@@ -670,12 +643,12 @@ These transformations were necessary prior to the advancements in computing powe
 Given the results of the residuals plot and the qqplot we will try different transformations to meet the model assumptions.
 
 ```{r}
-mod_log<-lm(log(yield)~density*loc,data=ANCOVA)
+mod_log <- lm(log(yield) ~ density * loc, data = ANCOVA)
 summary(mod_log)
 
 autoplot(mod_log)
 
-mod_sqrt<-lm(sqrt(yield)~density*loc,data=ANCOVA)
+mod_sqrt <- lm(sqrt(yield) ~ density * loc, data = ANCOVA)
 summary(mod_sqrt)
 
 autoplot(mod_sqrt)
@@ -684,12 +657,12 @@ autoplot(mod_sqrt)
 Neither of the transformations improve the distribution of the residuals, so we will try fitting a model that includes a polynomial term to address the curved linear relationship with the residuals.
 
 ```{r}
-mod_2<-lm(yield~poly(density,2)*loc,data=ANCOVA)
+mod_2 <- lm(yield ~ poly(density, 2) * loc, data = ANCOVA)
 summary(mod_2)
 
 autoplot(mod_2) #This greatly improves the residuals plot and qqplot
 
-car::Anova(mod_2,type="III")
+car::Anova(mod_2, type = "III")
 ```
 
 We find the same results that the interaction effect isn't significant, and we can now move onto the multiple comparisons steps.
@@ -699,16 +672,15 @@ We find the same results that the interaction effect isn't significant, and we c
 We will use the emmeans() function to produce the expected marginal means. 
 
 ```{r}
-mu_location<-mod_2%>%
-  emmeans(~loc)%>%
-  as_tibble()%>% #Converts the object to a tibble
-  arrange(emmean) #Arranges the emmean values as ascending values
+mu_location <- mod_2 %>%
+  emmeans(~ loc) %>% # same as , at = list(density = mean(ANCOVA$density)) - conditional effect
+  cld(Letters = letters) %>%
+  as_tibble() %>% # Converts the object to a tibble
+  arrange(emmean) # Arranges the emmean values as ascending values
 mu_location
 
-#emtrends to compare slopes between categorical variables
-mu_density_loc<-mod_2%>%
-  emtrends(pairwise~loc,var="density")
-mu_density_loc
+
+
 ```
 
 #### Multiple Comparisons
@@ -716,10 +688,16 @@ mu_density_loc
 We are comparing the slopes of the two trend lines to see if they are significantly different. The results of the ANOVA table indicate that they are not significantly different. We can review the multiple comparisons results to demonstrate how you would show significant results in the event that future examples show a significant interaction effect.
 
 ```{r}
-slope_means_tukey<-mod_2%>%
-  emtrends(pairwise~loc,var="density")%>%
-  cld(Letters=letters)
-slope_means_tukey
+#emtrends to compare slopes between categorical variables
+mu_density_linear <- mod_2 %>%
+  emtrends(pairwise ~ loc, var = "density", at = list(density = mean(ANCOVA$density)), deriv = 1) %>% 
+  cld(Letters = letters)
+mu_density_linear
+
+mu_density_quadratic <- mod_2 %>%
+  emtrends(pairwise ~ loc, var = "density", deriv = 2) %>%
+  cld(Letters = letters)
+mu_density_quadratic
 ```
 
 #### Data Visualization
@@ -728,21 +706,21 @@ We need to produce a trend line for each location. We will use the expand.grid()
 
 ```{r}
 summary(ANCOVA)
-new.x<-expand.grid(density=seq(18.78,184.75,length.out=100),
-                   loc=levels(ANCOVA$loc))
+new.x <- expand.grid(density = seq(18.78, 184.75, length.out=100),
+                   loc = levels(ANCOVA$loc))
 head(new.x)
-new.y<-predict(mod_2,newdata=new.x,interval='confidence')
+new.y <- predict(mod_2, newdata = new.x, interval = 'confidence')
 
 #Bring new.x and new.y together
-addThese<-data.frame(new.x,new.y)
-addThese<-rename(addThese,yield=fit)
+addThese <- data.frame(new.x, new.y)
+addThese <- rename(addThese, yield = fit)
 head(addThese)
 
-ggplot(ANCOVA,aes(x=density,y=yield,color=loc))+
-  geom_point(size=5)+
-  geom_smooth(data=addThese,aes(ymin=lwr,ymax=upr,fill=loc),stat='identity')+
-  scale_color_manual(values=c(P="blue",V="red"))+
-  scale_fill_manual(values=c(P="blue",V="red"))+
+ggplot(ANCOVA, aes(x = density, y = yield, color = loc)) +
+  geom_point(size = 5) +
+  geom_smooth(data = addThese, aes(ymin = lwr, ymax = upr, fill = loc), stat = 'identity') +
+  scale_color_manual(values = c(P = "blue", V = "red")) +
+  scale_fill_manual(values = c(P = "blue", V = "red")) +
   theme_classic()
 ```
 
@@ -753,13 +731,12 @@ We see parallel trend lines suggesting no significant difference in the relation
 We are going to revisit the penguin data to use as practice. We can upload the data again.
 
 ```{r}
-x<-"https://raw.githubusercontent.com/Conorfair/CAES_Training_Course_Data_Analysis_in_R/refs/heads/main/Two_Way_ANOVA.csv"
-Two_Way_Anova<-read.csv(x)
+Two_Way_Anova<-read_csv(here("data","Two_Way_ANOVA.csv")) %>%
+  mutate(island = as.factor(island),
+         year = as.factor(year),
+         species = as.factor(species))
 
-Two_Way_Anova<-subset(Two_Way_Anova,!is.na(sex)) #removes NAs within the sex variable
-Two_Way_Anova$island<-as.factor(Two_Way_Anova$island)
-Two_Way_Anova$year<-as.factor(Two_Way_Anova$year)
-Two_Way_Anova$species<-as.factor(Two_Way_Anova$species)
+Two_Way_Anova <- subset(Two_Way_Anova, !is.na(sex)) #removes NAs within the sex variable
 str(Two_Way_Anova)
 ```
 
