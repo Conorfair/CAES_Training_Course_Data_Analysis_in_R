@@ -33,13 +33,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r Read Libraries, include=FALSE}
-#Necessary Libraries
+# Necessary Libraries
+# Will load packages you have not yet installed - can take more time
 pacman::p_load(agridat, tidyverse, readr, here, # data import and handling
                conflicted, # handling function conflicts
                emmeans, multcomp, multcompView, # adjusted mean comparisons
-               lme4, #liner modeling
+               lme4, #linear modeling
                ggpp, desplot, gridExtra, ggfortify, # plots
-               forcats, stringr, performance, DHARMa) # others
+               lmtest, stringr, performance, DHARMa) # others
 
 # conflicts: identical function names from different packages
 conflict_prefer("filter", "dplyr")
@@ -48,7 +49,7 @@ conflict_prefer("summarize", "dplyr")
 ```
 
 # Linear Regression
-Linear regression is a means to test a relationship between independent variables(s) (i.e., manipulated variable(s)) and one dependent variable (response variable). Depending on the conditions of the independent variable(s) you may be testing a model that could be called a linear regression, ANOVA, or ANCOVA. We will discuss these differences and similarities. These models also have specific assumptions that must be met to produce estimates of the relationship that are not biased and useful in creating predictions and interpreting the results.  
+Linear regression is a means to test a relationship between independent variables(s) (i.e., predictor(s), explanatory variable(s)) and one dependent variable (response variable). Depending on the conditions of the independent variable(s) you may be testing a model that could be called a linear regression, ANOVA, or ANCOVA. We will discuss these differences and similarities. These models also have specific assumptions that must be met to produce estimates of the relationship that are not biased and useful in creating predictions and interpreting the results.  
 
 ## One-Way ANOVA
 The ANOVA model is a unique class of linear models where the response variable is quantitative (continuous) and the predictors are one or more nominal (categorical) variables. The term ANOVA comes from Analysis Of Variance, which is a method for separating the variance of a group of observations, which was invented by Ronald Fisher (over a century ago).  
@@ -62,17 +63,17 @@ This example is a pot-experiment to compare weed control efficacy of two herbici
 
 Sixteen uniform pots were prepared and sown with *Solanum nigrum*. When the plants reached the 4-true-leaves stage they were randomly sprayed with one of the above herbicide solutions following a completely randomized design (will be covered in more detail during the Experimental Design lecture) with four replicates. Three weeks after the treatment, the plants in each pot were harvested and weighed. The theory dictates that the lower the weight the higher the efficacy of herbicides. Our hypothesis was that there was a difference in the response (i.e., weight) among the different treatments. Identifying a treatment that produces the lowest weight would suggest better control of weed growth.
 
-#### Importing the Data
+### Importing the Data
 When organizing data (commonly in an excel file) note that the dataset is in a "tidy" format, with one row per observation and one column per variable. This is known as the long format and is what most functions expect to be used in R. Other data formats might be useful for some visualizations, but the data can be transformed into other formats when necessary.
 
 ```{r Importing One-Way ANOVA Data}
 One_Way_Anova <- read_csv(here("data", "One_Way_ANOVA.csv"))
 ```
 
-#### Data Description
+### Data Description
 The summary function of the data object produces summary statistics of each variable in the dataset. We can also use the tapply function to produce the treatment means and standard deviations for each treatment level. This can also be done using the dplyr function summarize. We get a glimpse at the treatment averages and the variation in standard deviation between treatments. We observed differences in the sample means, but our goal is to determine differences in the population means.
 
-```{r}
+```{r One-Way ANOVA Data Description}
 summary(One_Way_Anova)
 treatMeans <- tapply(One_Way_Anova$Weight, One_Way_Anova$Treat, mean)
 SDs <- tapply(One_Way_Anova$Weight, One_Way_Anova$Treat, sd)
@@ -80,10 +81,10 @@ descrit <- data.frame(treatMeans, SDs)
 descrit
 ```
 
-#### Fitting ANOVA Models with R
+### Fitting ANOVA Models with R
 Fitting a linear model with weight as the response variable and the factor of Treatment as the independent variable. You can either call the variable as a factor within the lm function, or you can convert the variable from a character to a factor. You can use the str function or look at the data object in the Environment tab.
 
-```{r}
+```{r One-Way ANOVA Model}
 str(One_Way_Anova)
 mod <- lm(Weight ~ factor(Treat), data = One_Way_Anova)
 
@@ -94,36 +95,36 @@ mod <- lm(Weight ~ Treat, data = One_Way_Anova)
 
 Following the linear model being fit, you can call the parameter estimates using the summary function. You can see the call which shows the terms included in the model, the summary statistics of the residuals, a table of coefficients, and some other statistical results. This summary output is less useful for ANOVA, but we will revisit this output for linear regression.
 
-```{r}
+```{r One-Way ANOVA Model Results}
 summary(mod)
 ```
 
 After fitting a model the values you are most interested in reviewing are the fitted values and the residuals, which can be extracted using the fitted() and residuals() functions. The fitted values are the same as the means calculated above. The residuals are the deviation each observation is away from the mean value, and will be used for later steps.
 
-```{r}
+```{r One-Way ANOVA Residuals}
 expected <- fitted(mod) #Not too useful but included here to show how to extract these values
 epsilon <- residuals(mod)
 ```
 
 The ANOVA table is commonly obtained using one of two methods from either the stats or car package. Certain model types we use in future more complicated models may prefer one over the other. There may be some guidance we can provide, but other situations may require some troubleshooting. It will be helpful to remember these options.
 
-```{r}
+```{r One-Way ANOVA Table}
 stats::anova(mod)
 car::Anova(mod)
 ```
 
 This is the type of output that is more often reported for ANOVA models. The interpretation of the F statistic and the p value follow commonly adopted thresholds where a p value < 0.05 is considered significant. The norm is to report the numerator and denominator degrees of freedom, the F value, and the p value (e.g., F(3,12)=23.663, p value < 0.0001). This says that the F-statistic from this model is 23.663 is larger than the critical value from the F-statistic table with numerator degrees of freedom 3 and denominator degrees of freedom 12. This test only tells us that there is a significant difference among the levels of the categorical variable. It doesn't say which levels are significantly different.
 
-#### Assumptions
+### Assumptions
 The results of the model are only valid when the assumptions for linear models are met. These are sometimes called the Gauss-Markov Assumptions or BLUE (Best Linear Unbiased Estimator). These assumptions will be the same for ANOVA, ANCOVA, and linear regression.
 
-Some of the assumptions have more to deal with how the data are collected and the experiment is designed - variation in the independent variables, random sampling, and linearity in parameters. The other assumptions are assessed after the model is tested - normally distributed errors, and homoskedasticity. There are other assumptions that are more theoretical in natures, and wont be discussed here.  
+Some of the assumptions have more to deal with how the data are collected and the experiment is designed - variation in the independent variables, random sampling, and linearity in parameters. The other assumptions are assessed after the model is tested - normally distributed errors (only impacts p-values, and CIs not parameter estimates), and homoskedasticity. There are other assumptions that are more theoretical in nature, and wont be discussed here.  
 
 The assessment of the residuals of the linear model can either be inspected visually in a graph, or by objective, formal hypotheses. The graphical methods are powerful in detecting strong deviations form the basic assumptions, and the formal hypotheses can be used when there are less clear answers.  
 
 To assess the normality of errors (residuals) we often use a QQ (quantile-quantile)-plot. The standardized residuals are plotted against the respective percentiles of a normal distribution. This can either be achieved using the qqnorm and qqline functions with the residuals - we called epsilon earlier, or using the ggplot function with the rstandard(mod) code. Make sure to run the qqnorm and qqline lines together.
 
-```{r}
+```{r One-Way ANOVA QQ Plot}
 qqnorm(epsilon)
 qqline(epsilon)
 
@@ -137,46 +138,46 @@ The goal is to observe the points fall along the line as close as possible. Some
 
 To assess homoskedasticity we look at the plot of the residuals against the fitted values. If the assumption of no systematic error and homogeneous errors is met, then the residuals should be randomly scattered without any visible systematic patterns. We can look for potential outliers, funnel-like patter suggesting heteroscedasticity, or a positive/negative trend in the residuals over the fitted values.
 
-```{r}
+```{r One-Way ANOVA Residual Plot}
 plot(residuals(mod) ~ fitted(mod))
 abline(h = 0)
 ```
 
 Alternatively you can use the autoplot function from the ggfortify package to look at a comprehensive output and review the assumptions.
 
-```{r}
+```{r One-Way ANOVA Autoplot}
 autoplot(mod)
 ```
 
 A formal hypothesis used to test the linear model assumptions for normally distributed residuals is the Shapiro-Wilks test on the residuals of the model. The null hypothesis is that the residuals are normally distributed. A significant result p value < 0.05 indicates the residuals are not normally distributed.
 
-```{r}
+```{r One-Way ANOVA Shapiro Test}
 shapiro.test(epsilon)
 ```
 
 A formal hypothesis used to test the linear model assumptions for homogeneity of variance is the Levene's test on the independent variables in the model. The null hypothesis is that the variance across all samples are equal. A significant result p value < 0.05 indicates there is one sample with a different variance. This is a useful test when you have a categorical independent variable where the residuals vs fitted plot would be more useful for a model with only continuous variables.
 
-```{r}
+```{r One-Way ANOVA Levene Test}
 car::leveneTest(Weight ~ Treat, One_Way_Anova, center = mean)
 ```
 
-#### Expected Marginal Means
+### Expected Marginal Means
 The expected marginal means will produce the arithmetic means when the experiment is balanced (same number of replicates within each group), but the means will be different when the experiment is unbalanced. We will use the emmeans() function to produce the expected marginal means (also known as least squares means). 
 
-```{r}
+```{r One-Way ANOVA Emmeans}
 mu_j <- mod %>%
   emmeans( ~ Treat)
 mu_j
 ```
 
-#### Multiple Comparisons
+### Multiple Comparisons
 Following the evidence to support the linear model meets the assumptions, further analysis can be completed to produce unbiased estimates. The rejection of the null hypothesis that all treatment groups are equal suggests that there is at least one difference. The process to determine which treatment groups are significantly different from the other is known as post-hoc multiple comparisons tests.
 
 Two general approaches for multiple comparisons tests include linear contrasts and pairwise comparisons. 
 
 Linear contrasts are a linear combination of means (model parameters) that add up to zero. One example from the herbicide treatments would be to compare the three herbicide treatments to the control 1/3+1/3+1/3-1=0 Each level of the treatment variable are given a constant that informs what levels are being compared. Here the average of the three treatments are being compared to the control. You can test multiple types of contrasts, but the constants have to sum to zero - this is known as orthogonal contrasts.
 
-```{r}
+```{r One-Way ANOVA Contrasts}
 cont1 <- c(1/3, 1/3, 1/3, -1) #the average of the first three levels compared to the fourth
 cont2 <- c(1/2, -1, 1/2, 0) #the average of the first and third level compared to the second
 cont3 <- c(0, -1, 1, 0) #the second level compared to the third
@@ -187,15 +188,15 @@ contrast(mu_j, method = contrasts, adjust = "none") #emmeans from expected margi
 
 The pairwise comparisons are more commonly used (sometimes overused) and follow two general approaches: 1) all pairwise comparisons, and comparisons with a control (Dunnett's method). All pairwise comparisons will yield a large number of contrasts, and some might not be of primary interest based on the hypothesis. Carefully consider these steps within the context of your data and hypotheses. Furthermore, the "dunnett" method defaults to comparing each level to the first level in alphabetical order, which may not be the control level. You can call the levels of the treatment variable from the dataset object and find that the fourth level is the control.
 
-```{r}
+```{r One-Way ANOVA MCP}
 contrast(mu_j, adjust = "none", method = "pairwise")
 levels(One_Way_Anova$Treat)
 contrast(mu_j, adjust = "none", method = "dunnett", ref = 4)
 ```
 
-With a large number of contrasts it can be impractical to report the effect size of all comparisons. The cld (compact letter display) function helps to visualize the differences between the treatment levels. You can produce either lowercase letters (letters) or uppercase letters (LETTERS). You can also have the letters follow increasing or decreasing emmean values. Be mindful that the letter display doesn't inform anything about the direction and size of the differences, which is it's chief criticism in their use to present experimental results. This criticism can be alleviated when the letters are showed along side the raw data.
+With a large number of contrasts it can be impractical to report the effect size of all comparisons. The cld (compact letter display) function helps to visualize the differences between the treatment levels. You can produce either lowercase letters (letters) or uppercase letters (LETTERS). You can also have the letters follow increasing or decreasing emmean values. Be mindful that the letter display doesn't inform anything about the direction and size of the differences, which is it's chief criticism in their use to present experimental results. This criticism can be alleviated when the letters are showed alongside the raw data.
 
-```{r}
+```{r One-Way ANOVA CLD}
 mu_j <- mod %>%
   emmeans(specs = "Treat") %>%
   cld(adjust = "none", Letters = letters)
@@ -211,7 +212,7 @@ In experiments that have a high number of contrasts or simultaneously tested hyp
 
 Other approaches make adjustments to the p values and the confidence intervals of the pairwise comparisons. The Sidak method is one approach that can be used with the following argument - adjust="sidak".
 
-```{r}
+```{r One-Way ANOVA Sidak}
 mu_j <- mod %>%
   emmeans(specs = "Treat") %>%
   cld(adjust = "sidak", Letters = letters)
@@ -220,7 +221,7 @@ mu_j
 
 Another example is the Bonferroni correction is simpler adjustment procedure and more commonly used. 
 
-```{r}
+```{r One-Way ANOVA Bonferroni}
 mu_j <- mod %>%
   emmeans(specs = "Treat") %>%
   cld(adjust = "bonferroni", Letters = letters)
@@ -229,7 +230,7 @@ mu_j
 
 The last multiplicity adjustment we will discuss is the option I most commonly see: Tukey's HSD. This option is the default method - we just remove the adjust argument. All three are seen as conservative adjustments. You can also see the individual comparisons by including details=TRUE option.
 
-```{r}
+```{r One-Way ANOVA Tukey}
 mu_j<-mod %>%
   emmeans(specs = "Treat") %>%
   cld(Letters = letters, details = F)
@@ -238,9 +239,9 @@ mu_j
 
 We can use the results of the multiple comparisons test to help answer our hypotheses.
 
-#### Data Visualization
+### Data Visualization
 
-```{r}
+```{r One-Way ANOVA Final Figure}
 mu_j <- mu_j %>%
   as_tibble()
 
@@ -257,31 +258,31 @@ Plot_means_tukey
 
 All treatments are better than the control (i.e., unweeded). Mixture_378 is a better treatment than Rimsulfuron_30, and Metribuzin_348 is no better than either of the treatments.
 
-# Two-Way ANOVA 
+## Two-Way ANOVA 
 
 When you have multiple independent variables in the linear model that are all categorical this is known as a two-way ANOVA. The following steps demonstrate how to perform an analysis of a two-way ANOVA.
 
-#### Review the Experimental Design
+### Review the Experimental Design
 
 Review the data and its characteristics you can confirm the appropriate analysis and understand the context of the hypothesis. This will also be helpful when considering how to visualize the data to help interpret the results.
 
 These data show the body mass in grams among different penguin species on different islands and between sexes of penguins. There are other variables recorded that could be analyzed, but we will be focusing on the species, sex, and body mass (g) of the penguins.
 
-#### Importing the Data
+### Importing the Data
 
 Remember the "tidy" format...
 
-```{r}
+```{r Importing Two-Way ANOVA Data}
 Two_Way_Anova <- read_csv(here("data", "Two_Way_ANOVA.csv"))
 
 Two_Way_Anova <- subset(Two_Way_Anova, !is.na(sex)) # removes NAs within the sex variable
 ```
 
-#### Data Description
+### Data Description
 
 The full dataset contains eight variables for 333 penguins (without NAs). Make sure to check the state/type of each variable in the dataframe to make sure the categorical variables are considered as Factors. You can either look in the Environment tab or use the str() function.
 
-```{r}
+```{r Two-Way ANOVA Data Description}
 summary(Two_Way_Anova)
 str(Two_Way_Anova)
 
@@ -290,7 +291,7 @@ Two_Way_Anova$sex <- factor(Two_Way_Anova$sex)
 str(Two_Way_Anova)
 ```
 
-#### Fitting ANOVA Models with R
+### Fitting ANOVA Models with R
 
 Fitting a linear model with body_mass_g as the response variable and the factors of species and sex as the independent categorical variables. 
 
@@ -310,19 +311,19 @@ Interaction between sex and species:
   H0: there is no interaction between sex and species, meaning that the relationship between species and body mass is the same for females and males  
   H1: there is an interaction between sex and species, meaning that the relationship between species and body mass is different for females than for males
 
-```{r}
+```{r Two-Way ANOVA Model}
 mod <- lm(body_mass_g ~ species * sex, data = Two_Way_Anova)
 ```
 
 Following the linear model being fit, we call the parameter estimates using the summary function.
 
-```{r}
+```{r Two-Way ANOVA Model Results}
 summary(mod)
 ```
 
 And we extract the residuals values.
 
-```{r}
+```{r Two-Way ANOVA Residuals}
 epsilon <- residuals(mod)
 ```
 
@@ -330,7 +331,7 @@ In this instance we are testing both species and sex and their interaction so th
 
 This [link](https://md.psych.bio.uni-goettingen.de/mv/unit/lm_cat/lm_cat_unbal_ss_explained.html) can provide more details for your reference.
 
-```{r}
+```{r Two-Way ANOVA Table}
 stats::anova(mod) #Presents type I sums of squares
 car::Anova(mod) #Presents type II sums of squares
 car::Anova(mod, type = "III")
@@ -338,17 +339,17 @@ car::Anova(mod, type = "III")
 
 Remember that this test only tells us that there is a significant difference among the levels of the categorical variable. It doesn't say which levels are significantly different.
 
-#### Assumptions
+### Assumptions
 To assess the normality of errors (residuals) we use a QQ (quantile-quantile)-plot. The standardized residuals are plotted against the respective percentiles of a normal distribution. 
 
-```{r}
+```{r Two-Way ANOVA QQ-Plot}
 qqnorm(epsilon)
 qqline(epsilon)
 ```
 
 To assess homoskedasticity we look at the plot of the residuals against the fitted values. 
 
-```{r}
+```{r Two-Way ANOVA Residuals Plot}
 plot(residuals(mod) ~ fitted(mod))
 abline(h = 0)
 
@@ -357,23 +358,23 @@ autoplot(mod)
 
 Then the Shapiro-Wilks test on the residuals of the model. 
 
-```{r}
+```{r Two-Way ANOVA Shapiro Test}
 shapiro.test(epsilon)
 ```
 
 Finally the Levene's test on the independent variables in the model. 
 
-```{r}
-car::leveneTest(mod)
+```{r Two-Way ANOVA Levene Test}
+car::leveneTest(mod ~ species * sex, data = Two_Way_Anova)
 ```
 
 Results of the above figures and tests indicate that model assumptions have been met.
 
-#### Expected Marginal Means
+### Expected Marginal Means
 
 We can call for the emmeans for both main effects and the interaction.
 
-```{r}
+```{r Two-Way Emmeans}
 mu_species <- mod %>%
   emmeans(~ species) %>%
   as_tibble() %>% #Converts the object to a tibble
@@ -391,13 +392,13 @@ group_by(Two_Way_Anova, species, sex) %>%
             sd = round(sd(body_mass_g, na.rm = TRUE)))
 ```
 
-#### Multiple Comparisons
+### Multiple Comparisons
 
 Following the evidence to support the linear model meets the assumptions, further analysis can be completed to produce unbiased estimates. The rejection of the null hypothesis that body mass is the same across the species and sexes suggests there is a difference among the levels of one variable across the other variable. We move onto the post-hoc multiple comparisons tests.
 
 When you have a significant interaction effect you shouldn't analyze the main effects independently since their interpretation is dependent on the other effect. There is another option for multiple comparisons tests when you have multiple factors and interactions. You can either test all pairwise comparisons by using a colon between the two terms, or you can test pairwise comparisons of one effect within the levels of another effect by using a pipe between the two terms. We will show both methods as an example.
 
-```{r}
+```{r Two-Way ANOVA Tukey}
 all_means_tukey <- mod %>%
   emmeans(~ species : sex) %>%
   cld(Letters = letters)
@@ -409,9 +410,9 @@ within_means_tukey <- mod %>%
 within_means_tukey
 ```
 
-#### Data Visualization
+### Data Visualization
 
-```{r}
+```{r Two-Way ANOVA Final Figure}
 all_means_tukey <- all_means_tukey %>%
   as_tibble() #convert object to tibble so that ggplot can read the details
 
@@ -440,29 +441,29 @@ Plot_within_means_tukey <- ggplot() +
 Plot_within_means_tukey
 ```
 
-# Simple Linear Regression
+## Simple Linear Regression
 
 When you have one or more independent variables in the linear model that are all continuous that is known as linear regression. Simple linear regression has one independent variable, and multiple linear regression has multiple independent variables.
 
-#### Review the Experimental Design
+### Review the Experimental Design
 
 Data from (Kniss et al. 2012) shows the sugar yield of sugar beet in response to volunteer corn density. The response variable is sucrose production in pounds per acre (LbsSucA), and the independent variable is volunteer corn density in plants per foot of row.
 
-#### Importing the Data
+### Importing the Data
 
-```{r}
+```{r Importing Regression Data}
 Simple_Linear_Regression <- read_csv(here("data", "Simple_Linear_Regression.csv"))
 ```
 
-#### Fitting Linear Model with R
+### Fitting Linear Model with R
 
-```{r}
+```{r Regression Model}
 mod <- lm(LbsSucA ~ Density, data = Simple_Linear_Regression)
 ```
 
 Following the linear model being fit, you can call the parameter estimates using the summary function.
 
-```{r}
+```{r Regression Model Results}
 summary(mod)
 ```
 
@@ -470,17 +471,17 @@ The resulting output provides estimates for the intercept (8677.6) and slope (-2
 
 The ANOVA table can be used but provides little information here. Furthermore, notice that the results for the effect of density do not change between the methods used - there is only one effect and no interaction.
 
-```{r}
+```{r Regression ANOVA Table}
 stats::anova(mod) #Presents type I sums of squares
 car::Anova(mod) #Presents type II sums of squares
 car::Anova(mod, type = "III")
 ```
 
-#### Assumptions
+### Assumptions
 
 To assess the normality of errors (residuals) we use the QQ (quantile-quantile)-plot again.
 
-```{r}
+```{r Regression QQ-Plot}
 qqnorm(mod$residuals)
 qqline(mod$residuals)
 
@@ -492,7 +493,7 @@ ggplot() +
 
 To assess homoskedasticity we look at the plot of the residuals against the fitted values.
 
-```{r}
+```{r Regression Residuals}
 plot(residuals(mod) ~ fitted(mod))
 abline(h = 0)
 
@@ -501,17 +502,22 @@ autoplot(mod)
 
 Then the Shapiro-Wilks test on the residuals of the model.
 
-```{r}
+```{r Regression Shapiro Test}
 shapiro.test(mod$residuals)
 ```
 
-No need to do a levene test since there is no categorical variable included in the model.
+No need to do a levene test since there is no categorical variable included in the model. The Breusch-Pagan test can be used instead.
 
-#### Data Visualization
+```{r Regression BP test}
+bptest(mod)
+```
+
+
+### Data Visualization
 
 This is a simple plot for the simple linear regression model above. There will be more complicated figures and syntax required with more complicated models.
 
-```{r}
+```{r Regression Final Figure}
 par(mfrow = c(1, 1), mar = c(3.2, 3.2, 2, 0.5), mgp = c(2, 0.7, 0)) #Number of rows of figures, the margins of the figure, and margin line for the axis title labels and line
 plot(Simple_Linear_Regression$LbsSucA ~ Simple_Linear_Regression$Density, bty = "l", #Y and X variables for the plot and the "L" box type for the plot area
      ylab = "Sugar yield (lbs/A)", xlab = "Volunteer corn density (plants/ft row)",
@@ -526,40 +532,40 @@ plot(Simple_Linear_Regression$LbsSucA ~ Simple_Linear_Regression$Density, bty = 
 
 The results from this model focus on the estimate of the slope (density) which has a negative value. This suggests that as density increases, yield will also decrease.
 
-# ANCOVA
+## ANCOVA
 
 When you have multiple independent variables in the linear model where at least one is categorical and at least one is continuous that is known as ANCOVA (analysis of covariance). The following steps demonstrate how to perform an analysis of ANCOVA.
 
-#### Review the Experimental Design
+### Review the Experimental Design
 
 By reviewing the data and its characteristics you can confirm the appropriate analysis and understand the context of the hypothesis. This will also be helpful when considering how to visualize the data to help interpret the results.
 
-#### Importing the Data
+### Importing the Data
 
 Remember the "tidy" format...
 
-```{r}
+```{r Importing ANCOVA Data}
 ANCOVA <- read_csv(here("data", "ANCOVA.csv")) %>%
   mutate(loc = as.factor(loc)) # Convert loc to a factor
 ```
 
-#### Data Description
+### Data Description
 
 The dataset contains the results from a onion trial that tested the effect of planting density (plants per square meter) at two locations (Purnong Landing or Virginia).
 
-```{r}
+```{r ANCOVA Data Description}
 summary(ANCOVA)
 ```
 
-#### Initial Visualization of the Data
+### Initial Visualization of the Data
 
-```{r}
+```{r ANCOVA Data Visualization}
 ggplot(ANCOVA, aes(x = density, y = yield, color = loc)) +
   geom_point() +
   theme_classic()
 ```
 
-#### Fitting ANOVA Models with R
+### Fitting ANOVA Models with R
 
 Fitting a linear model with yield as the response variable and the factors of density (continuous) and location (categorical) as the independent variables. Make sure to check the state/type of each variable in the dataframe to make sure the categorical variable is considered a Factor. You can either look in the Environment tab or use the str() function.
 
@@ -579,7 +585,7 @@ Interaction between location and density:
   H0: there is no interaction between location and density, meaning that the relationship between density and yield is the same for both locations  
   H1: there is an interaction between location and density, meaning that the relationship between density and yield is different between locations  
 
-```{r}
+```{r ANCOVA Model}
 str(ANCOVA)
 
 mod <- lm(yield ~ density * loc, data = ANCOVA)
@@ -587,29 +593,29 @@ mod <- lm(yield ~ density * loc, data = ANCOVA)
 
 Following the linear model being fit, you can call the parameter estimates using the summary function.
 
-```{r}
+```{r ANCOVA Model Results}
 summary(mod)
 ```
 
 After fitting a model we extract the residuals.
 
-```{r}
+```{r ANCOVA Residuals}
 epsilon <- residuals(mod)
 ```
 
 The ANOVA table needs the type 3 test for the interaction effect
 
-```{r}
+```{r ANCOVA ANOVA Table}
 car::Anova(mod, type = "III")
 ```
 
 The interaction effect isn't significant, but each main effect is. Remember that this test only tells us that there is a significant difference among the levels of the categorical variable. It doesn't say which levels are significantly different.
 
-#### Assumptions
+### Assumptions
 
 Assess the normality of errors (residuals) using a QQ (quantile-quantile)-plot.
 
-```{r}
+```{r ANCVOA QQ-Plot}
 qqnorm(mod$residuals)
 qqline(mod$residuals)
 
@@ -623,7 +629,7 @@ Some deviation from the line is normal, but look out for strong evidence of a sk
 
 Then assess homoskedasticity with the plot of the residuals against the fitted values. 
 
-```{r}
+```{r ANCOVA Residuals Plot}
 plot(residuals(mod) ~ fitted(mod))
 abline(h=0)
 
@@ -632,7 +638,7 @@ autoplot(mod)
 
 The formal hypothesis used to test the linear model assumptions for normally distributed residuals is the Shapiro-Wilks test on the residuals of the model. The null hypothesis is that the residuals are normally distributed. A significant result p value < 0.05 indicates the residuals are not normally distributed.
 
-```{r}
+```{r ANCOVA Shapiro Test}
 shapiro.test(mod$residuals)
 ```
 
@@ -642,7 +648,7 @@ These transformations were necessary prior to the advancements in computing powe
 
 Given the results of the residuals plot and the qqplot we will try different transformations to meet the model assumptions.
 
-```{r}
+```{r ANCOVA Transformations}
 mod_log <- lm(log(yield) ~ density * loc, data = ANCOVA)
 summary(mod_log)
 
@@ -656,7 +662,7 @@ autoplot(mod_sqrt)
 
 Neither of the transformations improve the distribution of the residuals, so we will try fitting a model that includes a polynomial term to address the curved linear relationship with the residuals.
 
-```{r}
+```{r ANCOVA Polynomial Model}
 mod_2 <- lm(yield ~ poly(density, 2) * loc, data = ANCOVA)
 summary(mod_2)
 
@@ -667,27 +673,24 @@ car::Anova(mod_2, type = "III")
 
 We find the same results that the interaction effect isn't significant, and we can now move onto the multiple comparisons steps.
 
-#### Expected Marginal Means
+### Expected Marginal Means
 
 We will use the emmeans() function to produce the expected marginal means. 
 
-```{r}
+```{r ANCOVA Emmeans}
 mu_location <- mod_2 %>%
   emmeans(~ loc) %>% # same as , at = list(density = mean(ANCOVA$density)) - conditional effect
   cld(Letters = letters) %>%
   as_tibble() %>% # Converts the object to a tibble
   arrange(emmean) # Arranges the emmean values as ascending values
 mu_location
-
-
-
 ```
 
-#### Multiple Comparisons
+### Multiple Comparisons
 
 We are comparing the slopes of the two trend lines to see if they are significantly different. The results of the ANOVA table indicate that they are not significantly different. We can review the multiple comparisons results to demonstrate how you would show significant results in the event that future examples show a significant interaction effect.
 
-```{r}
+```{r ANCVOA CLD}
 #emtrends to compare slopes between categorical variables
 mu_density_linear <- mod_2 %>%
   emtrends(pairwise ~ loc, var = "density", at = list(density = mean(ANCOVA$density)), deriv = 1) %>% 
@@ -700,11 +703,11 @@ mu_density_quadratic <- mod_2 %>%
 mu_density_quadratic
 ```
 
-#### Data Visualization
+### Data Visualization
 
 We need to produce a trend line for each location. We will use the expand.grid() and predict() functions to produce out of sample predictions that will be the trend line. The expand.grid() function would need to include other terms from the model - not relevant in this example. You would set either the mean or median of the other variables since you are testing the relationship between density and yield for both locations - holding all other variables constant.
 
-```{r}
+```{r ANCOVA Final Figure}
 summary(ANCOVA)
 new.x <- expand.grid(density = seq(18.78, 184.75, length.out=100),
                    loc = levels(ANCOVA$loc))
@@ -730,7 +733,7 @@ We see parallel trend lines suggesting no significant difference in the relation
 
 We are going to revisit the penguin data to use as practice. We can upload the data again.
 
-```{r}
+```{r Practice Data}
 Two_Way_Anova<-read_csv(here("data","Two_Way_ANOVA.csv")) %>%
   mutate(island = as.factor(island),
          year = as.factor(year),

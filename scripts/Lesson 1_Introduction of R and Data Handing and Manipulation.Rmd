@@ -140,7 +140,7 @@ class(is_highyield)
 
 * **Vectors**: a combination of multiple values (numeric, character or logical). Vector can only be of a single type.
 ```{r}
-# Creat a vector
+# Create a vector
 yield <- c(100, 129, 305, 281)
 variety <- c("v1", "v2", "v3", "v4")
 ```
