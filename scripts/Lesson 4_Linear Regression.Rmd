@@ -38,7 +38,7 @@ knitr::opts_chunk$set(echo = TRUE)
 pacman::p_load(agridat, tidyverse, readr, here, # data import and handling
                conflicted, # handling function conflicts
                emmeans, multcomp, multcompView, # adjusted mean comparisons
-               lme4, #linear modeling
+               lme4, # linear modeling
                ggpp, desplot, gridExtra, ggfortify, # plots
                lmtest, stringr, performance, DHARMa) # others
 
@@ -102,7 +102,7 @@ summary(mod)
 After fitting a model the values you are most interested in reviewing are the fitted values and the residuals, which can be extracted using the fitted() and residuals() functions. The fitted values are the same as the means calculated above. The residuals are the deviation each observation is away from the mean value, and will be used for later steps.
 
 ```{r One-Way ANOVA Residuals}
-expected <- fitted(mod) #Not too useful but included here to show how to extract these values
+expected <- fitted(mod) # Not too useful but included here to show how to extract these values
 epsilon <- residuals(mod)
 ```
 
@@ -130,7 +130,7 @@ qqline(epsilon)
 
 ggplot() +
   geom_qq(aes(sample=rstandard(mod))) +
-  geom_abline(color="red") +
+  geom_abline(color = "red") +
   theme_classic()
 ```
 
@@ -166,7 +166,7 @@ The expected marginal means will produce the arithmetic means when the experimen
 
 ```{r One-Way ANOVA Emmeans}
 mu_j <- mod %>%
-  emmeans( ~ Treat)
+  emmeans(~ Treat)
 mu_j
 ```
 
@@ -250,8 +250,8 @@ Plot_means_tukey <- ggplot() +
   geom_boxplot(data = One_Way_Anova, aes(y = Weight, x = Treat), position = position_nudge(x = -0.25), width = 0.25, outlier.shape = NA) + #boxplot
   geom_point(data = mu_j, aes(y = emmean, x = Treat), position = position_nudge(x = 0.15), size = 2, color = "red") + # red dots representing the adjusted means
   geom_errorbar(data = mu_j, aes(ymin = lower.CL, ymax = upper.CL, x = Treat), position = position_nudge(x = 0.15), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
-  geom_text(data=mu_j,aes(y=emmean,x=Treat,label=str_trim(.group)),position=position_nudge(x=0.25),color="black",angle=0)+ # red letters 
-  labs(y="Weed Weight (g)",x="Treatment")+
+  geom_text(data = mu_j, aes(y = emmean, x = Treat, label = str_trim(.group)), position = position_nudge(x = 0.25), color = "black", angle = 0) + # red letters 
+  labs(y = "Weed Weight (g)", x = "Treatment") +
   theme_classic()
 Plot_means_tukey
 ```
@@ -377,8 +377,8 @@ We can call for the emmeans for both main effects and the interaction.
 ```{r Two-Way Emmeans}
 mu_species <- mod %>%
   emmeans(~ species) %>%
-  as_tibble() %>% #Converts the object to a tibble
-  arrange(emmean) #Arranges the emmean values as ascending values
+  as_tibble() %>% # Converts the object to a tibble
+  arrange(emmean) # Arranges the emmean values as ascending values
 mu_species
 
 mu_sex <- mod %>%
@@ -414,10 +414,10 @@ within_means_tukey
 
 ```{r Two-Way ANOVA Final Figure}
 all_means_tukey <- all_means_tukey %>%
-  as_tibble() #convert object to tibble so that ggplot can read the details
+  as_tibble() # convert object to tibble so that ggplot can read the details
 
 Plot_all_means_tukey <- ggplot() +
-  geom_point(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = sex), position = position_dodgenudge(width = 0.9, x = 0)) + #dots representing the raw data
+  geom_point(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = sex), position = position_dodgenudge(width = 0.9, x = 0)) + # dots representing the raw data
   geom_boxplot(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = sex), width = 0.25, outlier.shape = NA, position = position_dodgenudge(width = 0.5, x = 0)) + # boxplot
   geom_point(data = all_means_tukey, aes(y = emmean, x = species, group = sex), position = position_dodgenudge(width = 0.5, x = 0), size = 2, color = "red") + # red dots representing the adjusted means
   geom_errorbar(data = all_means_tukey, aes(ymin = lower.CL, ymax = upper.CL, x = species, group = sex), position = position_dodgenudge(width = 0.5, x = 0),color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
@@ -430,7 +430,7 @@ within_means_tukey <- within_means_tukey %>%
   as_tibble()
 
 Plot_within_means_tukey <- ggplot() +
-  facet_wrap(~ sex, labeller = label_both) + #facet per sex level
+  facet_wrap(~ sex, labeller = label_both) + # facet per sex level
   geom_point(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = species)) + # dots representing the raw data
   geom_boxplot(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = species), width = 0.25, outlier.shape = NA, position = position_nudge(x = 0.2)) + # boxplot
   geom_point(data = within_means_tukey, aes(y = emmean, x = species), color = "red", position = position_nudge(x = 0.2)) + # red dots representing the adjusted means
@@ -472,8 +472,8 @@ The resulting output provides estimates for the intercept (8677.6) and slope (-2
 The ANOVA table can be used but provides little information here. Furthermore, notice that the results for the effect of density do not change between the methods used - there is only one effect and no interaction.
 
 ```{r Regression ANOVA Table}
-stats::anova(mod) #Presents type I sums of squares
-car::Anova(mod) #Presents type II sums of squares
+stats::anova(mod) # Presents type I sums of squares
+car::Anova(mod) # Presents type II sums of squares
 car::Anova(mod, type = "III")
 ```
 
@@ -518,8 +518,8 @@ bptest(mod)
 This is a simple plot for the simple linear regression model above. There will be more complicated figures and syntax required with more complicated models.
 
 ```{r Regression Final Figure}
-par(mfrow = c(1, 1), mar = c(3.2, 3.2, 2, 0.5), mgp = c(2, 0.7, 0)) #Number of rows of figures, the margins of the figure, and margin line for the axis title labels and line
-plot(Simple_Linear_Regression$LbsSucA ~ Simple_Linear_Regression$Density, bty = "l", #Y and X variables for the plot and the "L" box type for the plot area
+par(mfrow = c(1, 1), mar = c(3.2, 3.2, 2, 0.5), mgp = c(2, 0.7, 0)) # Number of rows of figures, the margins of the figure, and margin line for the axis title labels and line
+plot(Simple_Linear_Regression$LbsSucA ~ Simple_Linear_Regression$Density, bty = "l", # Y and X variables for the plot and the "L" box type for the plot area
      ylab = "Sugar yield (lbs/A)", xlab = "Volunteer corn density (plants/ft row)",
      main = "Lingle, WY 2009", ylim = c(0, 10000))
   abline(mod) # Add the regression line
@@ -734,12 +734,12 @@ We see parallel trend lines suggesting no significant difference in the relation
 We are going to revisit the penguin data to use as practice. We can upload the data again.
 
 ```{r Practice Data}
-Two_Way_Anova<-read_csv(here("data","Two_Way_ANOVA.csv")) %>%
+Two_Way_Anova<-read_csv(here("data", "Two_Way_ANOVA.csv")) %>%
   mutate(island = as.factor(island),
          year = as.factor(year),
          species = as.factor(species))
 
-Two_Way_Anova <- subset(Two_Way_Anova, !is.na(sex)) #removes NAs within the sex variable
+Two_Way_Anova <- subset(Two_Way_Anova, !is.na(sex)) # removes NAs within the sex variable
 str(Two_Way_Anova)
 ```
 
