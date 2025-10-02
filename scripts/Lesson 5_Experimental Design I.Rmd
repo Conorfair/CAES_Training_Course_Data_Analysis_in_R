@@ -48,7 +48,7 @@ conflict_prefer("summarize", "dplyr")
 
 # Experimental Design
 
-When designing experiments, one of the more consequential decisions is how treatments are assigned experimental units. We mentioned Gauss-Markov assumptions and that some assumptions deal with how the experiment is designed. The relevant assumption here is that experimental units are randomly assigned to treatments. When researchers don't always have the tools or resources to meet this assumption, but thankfully there are methods to address this. When this assumption is met, the experiment is said to follow a completely randomized design (CRD).
+When designing experiments, one of the more consequential decisions is how treatments are assigned experimental units. We mentioned Gauss-Markov assumptions and that some assumptions deal with how the experiment is designed. The Gauss–Markov assumption relevant here is that experimental units are randomly assigned to treatments. When researchers don't always have the tools or resources to meet this assumption, but thankfully there are methods to address this. When this assumption is met, the experiment is said to follow a completely randomized design (CRD).
 
 ## Completely Randomized Design
 
@@ -70,7 +70,7 @@ The column variety needs to be encoded as a factor instead of the character vari
 
 ```{r}
 dat <- dat %>%
-  mutate_at(vars(variety), as.factor)
+  mutate(variety = as.factor(variety))
 str(dat)
 ```
 
@@ -113,7 +113,7 @@ mod <- lm(yield ~ variety, data = dat)
 summary(mod)
 ```
 
-The Anova function produces the table of F-Statistics to determine if there significant differences among the different levels of the varieties tested. Given there is only one term in the model type 1 and 2 would produce the same results and type 3 is inappropriate without an interaction term (produces the same values regardless).
+The Anova function produces the table of F-Statistics to determine if there significant differences among the different levels of the varieties tested. Given there is only one term in the model type 1 and 2 would produce the same results and type 3 is redundant without an interaction term (produces the same values regardless).
 
 ```{r}
 mod %>% car::Anova(type = 2)
@@ -207,7 +207,7 @@ str(dat)
 
 ### Exploring the Data
 
-We now produce a field layout of the trial using the desplot() function just like in the CRD above. Notice how the nitrogen and genotype treatments are randomly assigned within each rep (block). Each level of nitrogen and genotype are represented within each block (complete).
+We now produce a field layout of the trial using the desplot() function just like in the CRD above. Notice how the nitrogen and genotype treatments are randomly assigned within each rep (block). Each level of nitrogen and genotype are represented within each block (complete). In this desplot, the fill color corresponds to block (rep), while genotype (G) labels are printed inside each cell and colored by nitrogen level (N). 
 
 ```{r}
 desplot(data = dat,
@@ -269,7 +269,7 @@ car::Anova(mod_fe, type = 3)
 epsilon <- residuals(mod_fe) #used to test model assumptions
 ```
 
-We see a significant interaction effect between nitrogen and genotype so we won't be testing the main effects independently. Also the rep (block) effect isn't significant.
+Because the N × G interaction is significant, interpretation of main effects is not meaningful without reference to the interaction. Even if block effects are not significant, they should remain in the model if they reflect the design structure.
 
 ### Assumptions
 
@@ -321,11 +321,11 @@ withinG_RCBD_Plot_tukey
 
 ## Latin Square Design
 
-When the experimental design is arranged in a grid or matrix with the same number of rows and columns. Each treatment combination appears exactly once in every row and column. This allows for the control of unexplained variation in two directions (i.e., along the rows and columns). 
+When the experimental design is arranged in a grid or matrix with the same number of rows and columns. Each treatment appears exactly once in every row and column. This allows for the control of unexplained variation in two directions (i.e., along the rows and columns). 
 
-### Review the Experiemental Design
+### Review the Experimental Design
 
-Data published from (Bridges 1989) include trials of yield from four different cucumber varieties with four rows and columns. The allocation of the treatments (varieties) to the experimental units (plots) was completely at random along the rows and columns - following a latin square design (LSD). We are reviewing the data collected from one of the two locations.
+Data published from (Bridges 1989) include trials of yield from four different cucumber varieties with four rows and columns. The allocation of the treatments (varieties) to the experimental units (plots) was completely at random along the rows and columns - following a Latin square design (LS design). We are reviewing the data collected from one of the two locations.
 
 ### Importing the Data
 
@@ -465,6 +465,6 @@ str(dat)
 Example 1
 Following the guidelines above test the following hypothesis:
 
-1) The variation in yield is equal among the four different genotypes
+1) The mean yield is equal among the four different genotypes
 
 Think about which type of model you need to use to test these hypotheses. Report the results from your assessments of the linear model assumptions. Use the multiple comparisons results in a final figure to demonstrate how the results support or refute the above hypotheses.
