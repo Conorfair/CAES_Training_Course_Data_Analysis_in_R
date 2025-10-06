@@ -430,7 +430,7 @@ within_means_tukey <- within_means_tukey %>%
   as_tibble()
 
 Plot_within_means_tukey <- ggplot() +
-  facet_wrap(~ sex, labeller = label_both) + # facet per sex level
+  facet_wrap(~ sex, labeller = label_both, scale = "free_y") + # facet per sex level
   geom_point(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = species)) + # dots representing the raw data
   geom_boxplot(data = Two_Way_Anova, aes(y = body_mass_g, x = species, color = species), width = 0.25, outlier.shape = NA, position = position_nudge(x = 0.2)) + # boxplot
   geom_point(data = within_means_tukey, aes(y = emmean, x = species), color = "red", position = position_nudge(x = 0.2)) + # red dots representing the adjusted means
@@ -671,14 +671,31 @@ autoplot(mod_2) #This greatly improves the residuals plot and qqplot
 car::Anova(mod_2, type = "III")
 ```
 
-We find the same results that the interaction effect isn't significant, and we can now move onto the multiple comparisons steps.
+We find the same results that the interaction effect isn't significant, but we can compare against the initial ANCOVA model we fit. We cannot compare against the log- or sqrt-transformed models because they on a different transformed response variable.
+
+```{r ANCOVA Model Comparison}
+AIC(mod, mod_2)
+```
+
+The polynomial model performed better than the linear ANCVOA model. The residual plot from the log-transformed model looked better than the linear ANCOVA model. Let's consider a model that does both. We can then compare those two models.
+
+```{r ANCOVA log-transformed Model Comparison}
+mod_log_2 <- lm(log(yield) ~ poly(density, 2) * loc, data = ANCOVA)
+summary(mod_log_2)
+autoplot(mod_log_2)
+
+AIC(mod_log, mod_log_2)
+
+car::Anova(mod_log_2, type = "III")
+```
+
 
 ### Expected Marginal Means
 
 We will use the emmeans() function to produce the expected marginal means. 
 
 ```{r ANCOVA Emmeans}
-mu_location <- mod_2 %>%
+mu_location <- mod_log_2 %>%
   emmeans(~ loc) %>% # same as , at = list(density = mean(ANCOVA$density)) - conditional effect
   cld(Letters = letters) %>%
   as_tibble() %>% # Converts the object to a tibble
@@ -692,15 +709,27 @@ We are comparing the slopes of the two trend lines to see if they are significan
 
 ```{r ANCVOA CLD}
 #emtrends to compare slopes between categorical variables
-mu_density_linear <- mod_2 %>%
-  emtrends(pairwise ~ loc, var = "density", at = list(density = mean(ANCOVA$density)), deriv = 1) %>% 
-  cld(Letters = letters)
-mu_density_linear
+# First derivative (slopes) at mean density
+mu_density_linear <- emtrends(mod_log_2, ~ loc, var = "density", 
+                              at = list(density = mean(ANCOVA$density)), deriv = 1)
 
-mu_density_quadratic <- mod_2 %>%
-  emtrends(pairwise ~ loc, var = "density", deriv = 2) %>%
-  cld(Letters = letters)
-mu_density_quadratic
+# Run cld() on the emmGrid object
+mu_density_linear_cld <- cld(mu_density_linear, Letters = letters)
+mu_density_linear_cld
+
+# Predicted means at mean density (for back-transform)
+mu_density_pred <- emmeans(mod_log_2, ~ loc, 
+                           at = list(density = mean(ANCOVA$density)))
+
+# Turn both into data frames
+df_slopes <- as.data.frame(mu_density_linear_cld)   # includes cld letters
+df_preds  <- as.data.frame(mu_density_pred)
+
+# Back-transform slope: slope_log * predicted_yield
+df_slopes$predicted_yield <- exp(df_preds$emmean)  # back-transform mean
+df_slopes$slope_yield     <- df_slopes$density.trend * df_slopes$predicted_yield
+
+df_slopes
 ```
 
 ### Data Visualization
@@ -708,23 +737,65 @@ mu_density_quadratic
 We need to produce a trend line for each location. We will use the expand.grid() and predict() functions to produce out of sample predictions that will be the trend line. The expand.grid() function would need to include other terms from the model - not relevant in this example. You would set either the mean or median of the other variables since you are testing the relationship between density and yield for both locations - holding all other variables constant.
 
 ```{r ANCOVA Final Figure}
-summary(ANCOVA)
-new.x <- expand.grid(density = seq(18.78, 184.75, length.out=100),
-                   loc = levels(ANCOVA$loc))
-head(new.x)
-new.y <- predict(mod_2, newdata = new.x, interval = 'confidence')
+# Prediction grid for fitted curves (log model)
+new.x <- expand.grid(density = seq(18.78, 184.75, length.out = 100),
+                     loc = levels(ANCOVA$loc))
+new.y <- predict(mod_log_2, newdata = new.x, interval = "confidence")
 
-#Bring new.x and new.y together
-addThese <- data.frame(new.x, new.y)
-addThese <- rename(addThese, yield = fit)
-head(addThese)
+addThese <- data.frame(new.x, new.y) %>%
+  rename(log_yield = fit) %>%
+  mutate(yield = exp(log_yield),
+         lwr = exp(lwr),
+         upr = exp(upr))
 
-ggplot(ANCOVA, aes(x = density, y = yield, color = loc)) +
-  geom_point(size = 5) +
-  geom_smooth(data = addThese, aes(ymin = lwr, ymax = upr, fill = loc), stat = 'identity') +
+# df_slopes_plot has slope, .group, loc
+# df_preds has predicted mean yield, loc
+
+df_slopes_plot <- df_slopes %>% select(loc, density.trend, .group) %>%
+  mutate(density = mean(ANCOVA$density))
+
+df_preds <- df_preds %>% select(loc, emmean) %>%
+  mutate(predicted_yield = exp(emmean))
+
+# Join by loc to make sure everything lines up
+df_slopes_plot <- left_join(df_slopes_plot, df_preds, by = "loc")
+
+# Compute back-transformed slope
+df_slopes_plot <- df_slopes_plot %>%
+  mutate(slope_yield = density.trend * predicted_yield)
+
+# Define the canonical order once
+loc_levels <- c("P", "V")   # or whatever order you want in the legend
+
+# Apply to all data frames
+ANCOVA$loc         <- factor(ANCOVA$loc, levels = loc_levels)
+addThese$loc       <- factor(addThese$loc, levels = loc_levels)
+df_slopes_plot$loc <- factor(df_slopes_plot$loc, levels = loc_levels)
+
+# Base plot: raw data + fitted lines
+p <- ggplot(ANCOVA, aes(x = density, y = yield, color = loc)) +
+  geom_point(size = 3, alpha = 0.6) +
+  geom_ribbon(data = addThese, 
+              aes(x = density, ymin = lwr, ymax = upr, fill = loc), 
+              alpha = 0.2, color = NA, inherit.aes = FALSE, show.legend = FALSE) +
+  geom_line(data = addThese, aes(x = density, y = yield, color = loc), size = 1) +
   scale_color_manual(values = c(P = "blue", V = "red")) +
   scale_fill_manual(values = c(P = "blue", V = "red")) +
-  theme_classic()
+  theme_classic(base_size = 14)
+
+# Add CLD labels with matching colors
+p <- p + geom_label(
+  data = df_slopes_plot,
+  aes(x = density, y = predicted_yield, label = str_trim(.group), fill = loc),
+  color = "white",       # text color
+  fontface = "bold",     # bold letters
+  label.size = 0,        # remove border around label
+  alpha = 0.8,           # semi-transparent background
+  nudge_y = 0.05 * max(ANCOVA$yield),  # move letters above points
+  show.legend = FALSE
+  )
+p
+
 ```
 
 We see parallel trend lines suggesting no significant difference in the relationship between density and yield among the two locations.

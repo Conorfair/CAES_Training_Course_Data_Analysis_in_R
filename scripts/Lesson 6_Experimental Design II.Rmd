@@ -1,7 +1,7 @@
 ---
 title: "Experimental Design II"
 author: "Conor Fair"
-date: "2025-10-6"
+date: "2025-10-06"
 output:
   html_document:                           # Options for HTML output
     theme: flatly                           # Sets a Bootstrap theme for HTML
@@ -34,7 +34,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, include=FALSE}
 # Necessary Libraries
-pacman::p_load(agridat, tidyverse, dplyr, here, # data import and handling
+pacman::p_load(agridat, tidyverse, dplyr, here, reshape2, # data import and handling
                conflicted,# handling function conflicts
                emmeans, multcomp, multcompView, # adjusted mean comparisons
                ggplot2, ggpp, desplot, gridExtra, ggfortify, gganimate, gifski, # plots
@@ -65,7 +65,7 @@ There are situations where the logistical constraints of setting up an experimen
 
 ### Review the Experimental Design
 
-The data for this example is a slightly modified version of the yield (kg/ha) trial from the RCBD example now laid out as a split-plot design (Gomez & Gomez 1984). The trial had 4 genotypes (G), 6 nitrogen levels (N or n_amount) with 3 complete replicates (rep) and 6 incomplete blocks (mainplot - columns) within each replicate.
+The data for this example is a slightly modified version of the yield (kg/ha) trial from the RCBD example now laid out as a split-plot design (Gomez & Gomez 1984). The trial had 4 genotypes (G), 6 nitrogen levels (N or n_amount) with 3 complete replicates (rep). Within each replicate, there are six main plots (columns), and the six levels of nitrogen treatments are randomly assigned to these main plots. Within each main plot, the four genotypes are randomly assigned to subplots. Here, replicates are the ‘blocks’ in the classical split-plot terminology.
 
 ### Importing the Data
 
@@ -82,7 +82,7 @@ The variables rep, mainplot, N, and G needs to be encoded as a factor instead of
 
 ```{r}
 dat <- dat %>%
-  mutate_at(vars(rep, mainplot, N, G), as.factor) # can use "rep:N" to include all columns between rep and N
+  mutate(across(c(rep, mainplot, N, G), as.factor)) # can use "rep:N" to include all columns between rep and N
 ```
 
 ### Exploring the Data
@@ -147,6 +147,10 @@ The goal is to determine if there is a difference in yield between varieties and
 
 The interaction notation N * G is short for N + G + N:G
 
+`(1|rep)` represents the block level variance - random effect
+`(1|rep:mainplot)` represents the whole-plot (main plot) error - random effect
+The residual represents the sub-plot variability not captured by mainplot variance
+
 ```{r}
 mod_re <- lmerTest::lmer(yield ~ N * G + (1|rep) + (1|rep:mainplot), data = dat) 
 summary(mod_re) # We can ignore the Singular fit warning message for now
@@ -159,7 +163,7 @@ epsilon <- residuals(mod_re)
 
 There are three types of sums of squares (1, 2, or 3). This is an important consideration when the data is unbalanced (missing data). To demonstrate the differences we will consider a model that includes two categorical independent variables (Factor A and Factor B). The model will test the two main effects and the interaction between the two factors. Type 1 sums of squares is also called "sequential" sums of square that tests for Factor A, then Factor B, then the interaction of Factor A and B. When the data is unbalanced the sums of squares will give a different result depending on which main effect is considered first. It is rare that you want to test the main effects sequentially, so normally you should use Type 2 or 3 sums of squares. 
 
-Type 2 sums of squares is used only when you are not testing an interaction, and tests each main effect after the other main effect. Type 3 sums of squares is used when you are testing an interaction. If you test the interaction and it is not significant, then you can test the main effects alone and use the type 2 sums of squares - it is more powerful than type 3.
+Type 2 sums of squares is used only when you are not testing an interaction, and tests each main effect after the other main effect. Type 3 sums of squares tests each main effect after accounting for all other effects, including interactions;it is commonly used when you are testing an interaction. If you test the interaction and it is not significant, then you can test the main effects alone and use the type 2 sums of squares - it is more powerful than type 3.
 
 This [link](https://md.psych.bio.uni-goettingen.de/mv/unit/lm_cat/lm_cat_unbal_ss_explained.html) can provide more details for your reference.
 
@@ -182,7 +186,8 @@ check_model(mod_re, check = c("normality", "homogeneity"))
 
 shapiro.test(epsilon)
 
-car::leveneTest(epsilon ~ N * G, data = dat)
+dat$resid <- residuals(mod_re)
+car::leveneTest(resid ~ N * G, data = dat)
 ```
 
 Results indicate the satisfaction of linear model assumptions, so we can move onto multiple comparisons tests.
@@ -218,7 +223,7 @@ RCBD_Plot_tukey <- ggplot() +
   geom_point(data = all_mean_comparisons_tukey_re, aes(y = emmean, x = N_G), size = 2, color = "red") + #  red dots representing the adjusted means
   geom_errorbar(data = all_mean_comparisons_tukey_re, aes(ymin = lower.CL, ymax = upper.CL, x = N_G), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
   geom_text(data = all_mean_comparisons_tukey_re, aes(y = 10000, x = N_G, label = str_trim(.group)), color = "red", position = position_nudge(x = -0.2), hjust = 0, angle = 90) + # red letters 
-  scale_y_continuous(name = "Yield", limits = c(0, 11000), expand = expansion(mult = c(0, 0.1))) +
+  scale_y_continuous(name = "Yield", limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
   scale_x_discrete(name = "Nitrogen-Genotype combination") +
   theme_classic() + # clearer plot format 
 labs(caption=str_wrap("Black dots represent raw data. Red dots and error bars represent estimated marginal means ± 95% confidence interval per group. Means not sharing any letter are significantly different by the t-test at the 5% level of significance.", width = 120)) +
@@ -228,13 +233,13 @@ RCBD_Plot_tukey
 
 ## Repeated Measures
 
-When repeated observations on made on the same individual experimental unit this violates one of the linear model assumptions - no autocorrelation among errors. This analysis requires some specific steps to account for the temporal autocorrelation. We will first fit a model that assumes no autocorrelation. Then we will fit multiple models that assume different types of temporal autocorrelation and compare them to see which fits the data best.
+When repeated observations are made on the same individual experimental unit this violates one of the linear model assumptions - no autocorrelation among errors. This analysis requires some specific steps to account for the temporal autocorrelation. We will first fit a model that assumes no autocorrelation. Then we will fit multiple models that assume different types of temporal autocorrelation and compare them to see which fits the data best.
 
 ### Review the Experimental Design
 
 Data from a sorghum trial laid out as a randomized complete block design with five blocks and four sorghum varieties as the only treatment factor. The response variable - leaf area index - was measured in five consecutive weeks on each plot starting two weeks after emergence. The repeated observation variable (week) needs to be treated as a factor - all measurements were made at discrete time points. This dataset is comprised of 100 values resembling longitudinal data - repeated measures or time series analysis.
 
-The week factor is not a treatment factor that can be randomized. The repeated measurements of the same experimental unit are likely to be serially correlated, which need to be accounted for to produce a non-biased estimate of the differences between varieties.
+The week factor is not a treatment factor that can be randomized. The repeated measurements of the same experimental unit are likely to be serially correlated, which needs to be accounted for to produce a non-biased estimate of the differences between varieties.
 
 ### Importing the Data
 
@@ -337,7 +342,49 @@ These results assume independent and homogeneous error term, which MAY be wrong.
 
 ### Autocorrelated Errors
 
-Experimental units on which repeated observations are made are often referred to as subjects. We would now like to allow measurements taken on the same subjects (plot in this case) to be serially correlated, while observations on different subjects are still considered independent. More specifically, we want the errors of the respective observations to be correlated in our model. It is also reasonable to assume a weaker correlation between errors that are further apart in time between measurements. 
+Experimental units on which repeated observations are made are often referred to as subjects. We would now like to allow measurements taken on the same subjects (plot in this case) to be serially correlated, while observations on different subjects are still considered independent. More specifically, we want the errors of the respective observations to be correlated in our model. It is also reasonable to assume a weaker correlation between errors that are further apart in time between measurements.
+
+```{r}
+# Function to create correlation matrices
+make_corr_matrix <- function(type, n=5, rho=0.6) {
+  mat <- matrix(0, n, n)
+  if(type=="AR1") {
+    for(i in 1:n) for(j in 1:n) mat[i,j] <- rho^abs(i-j)
+  } else if(type=="CS") {
+    mat <- matrix(rho, n, n)
+    diag(mat) <- 1
+  } else if(type=="Toeplitz") {
+    rho_seq <- seq(rho, rho^n, length.out=n)
+    for(i in 1:n) for(j in 1:n) mat[i,j] <- rho_seq[abs(i-j)+1]
+    diag(mat) <- 1
+  } else if(type=="UN") {
+    mat <- matrix(NA, n, n) # unstructured: all correlations potentially different
+  }
+  rownames(mat) <- colnames(mat) <- paste0("t", 1:n)
+  mat
+}
+
+plot_corr_matrix <- function(mat, title) {
+  melted <- melt(mat, na.rm=TRUE)
+  ggplot(melted, aes(Var1, Var2, fill=value)) +
+    geom_tile(color="white") +
+    scale_fill_gradient2(low="blue", high="red", mid="white", midpoint=0.5, limits=c(0,1)) +
+    theme_minimal() + coord_fixed() +
+    ggtitle(title) + xlab("") + ylab("") +
+    theme(axis.text.x = element_text(angle=45, hjust=1))
+}
+
+# Plot examples
+plot_corr_matrix(make_corr_matrix("AR1"), "AR(1) Correlation")
+plot_corr_matrix(make_corr_matrix("CS"), "Compound Symmetry (CS) Correlation")
+plot_corr_matrix(make_corr_matrix("Toeplitz"), "Toeplitz Correlation")
+plot_corr_matrix(make_corr_matrix("UN"), "Unstructured (UN) Correlation")
+```
+
+- AR(1) decreases with lag
+- CS is constant
+- Toeplitz varies arbitrarily by lag
+- UN allows every entry to differ
 
 ### AR(1)
 
@@ -345,7 +392,7 @@ The most popular correlation structure is called first order autoregressive AR(1
 
 ```{r}
 mod.AR1 <- glmmTMB(formula = y ~ weekF * variety + (1|block) +
-                   ar1(weekF + 0 | plot), # ar1 structure as random term to mimic error var
+                   ar1(weekF + 0 | plot), # ar1 structure as random term to mimic error var, and + 0 is used to remove intercept term from random term covariance specification, which is required to properly define the covariance matrix for repeated measures
                    dispformula = ~ 0, # fix original error variance to 0
                    REML = TRUE,       # needs to be stated since default = ML
                    data = dat) 
@@ -375,7 +422,7 @@ Toeplitz (glmmTMB only) can be calculated faster than similar AR(1) approach. To
 
 ```{r}
 mod.Toep <- glmmTMB(formula = y ~ weekF * variety + (1|block) +
-                   toep(weekF + 0 | plot), # teop structure as random term to mimic err var
+                   toep(weekF + 0 | plot), # toep structure as random term to mimic err var
                    dispformula = ~ 0, # fix original error variance to 0
                    REML = TRUE,       # needs to be stated since default = ML
                    data = dat) 
@@ -407,10 +454,12 @@ In order to select the best model here, we can simply compare their AIC values, 
 AICcmodavg::aictab(
   cand.set = list(mod.iid, mod.hCS, mod.AR1, mod.Toep, mod.UN), 
   modnames = c("iid", "hCS", "AR1", "Toeplitz", "UN"),
-  second.ord = FALSE) # get AIC instead of AICc
+  second.ord = FALSE,   # get AIC instead of AICc
+  sort = TRUE
+)
 ```
 
-According to AIC values the UN correlation structure has the lowest AIC value as no others are within within 2. It is common to use Delta AIC < 2 to select a model. We will now review the UN model in the following steps.
+According to AIC values the UN correlation structure has the lowest AIC value as no others are within 2. It is common to use Delta AIC < 2 to select a model. We will now review the UN model in the following steps.
 
 The Anova function produces the table of F-Statistics to determine if there significant differences among the different levels of the varieties tested. 
 
@@ -476,13 +525,13 @@ withinWeek_UN_Plot_tukey
 
 ## Practice Example
 
-We will use the data from an experiment conducted in a greenhouse in Silver Bay, Minnesota. Plants exposed to different (three) treatments were observed over a 40 day period. Make sure to modify the variable types to factor for the repeated measures analysis. Fit a linear model assuming no random effects, a linear mixed effects model with a random intercept for each plant, and a linear mixed effects model that tests unstructured variance, heterogeneous compound symmetry, autoregressive order-1, homogeneous diagonal variance, and and heterogeneous diagonal variance structures.
+We will use the data from an experiment conducted in a greenhouse in Silver Bay, Minnesota. Plants exposed to different (three) treatments were observed over a 40 day period. Make sure to modify the variable types to factor for the repeated measures analysis. Fit a linear model assuming no random effects, a linear mixed effects model with a random intercept for each plant, and a linear mixed effects model that tests unstructured variance, heterogeneous compound symmetry, autoregressive order-1, homogeneous diagonal variance, and heterogeneous diagonal variance structures.
 
 ```{r}
 library(agridat)
 data(pederson.lettuce.repeated)
 dat <- pederson.lettuce.repeated
-libs(lattice)
+library(lattice)
 dat <- dat[order(dat$day),]
 xyplot(weight ~ day|trt, dat, type = 'l', group = plant, layout = c(3, 1),
 main = "pederson.lettuce.repeated")
@@ -527,7 +576,9 @@ mod.CS <- glmmTMB(weight ~ trt * day + cs(day + 0|plant),
 mod.HomD <- glmmTMB(weight ~ trt * day + homdiag(day + 0|plant),
                 dispformula = ~ 0, REML = TRUE, data = dat)
 mod.HetD <- glmmTMB(weight ~ trt * day + diag(day + 0|plant),
-                dispformula = ~ 0, REML = TRUE, data = dat) # Convergence warning - try different optimizer
+                dispformula = ~ 0, REML = TRUE, data = dat) 
+# Convergence warning - try different optimizer
+# Very common to get convergence warnings for small datasets of some covariance structures
 mod.HetD <- glmmTMB(weight ~ trt * day + diag(day + 0|plant),
                 dispformula = ~ 0, REML = TRUE, data = dat,
                 control = glmmTMBControl(optimizer = optim, optArgs = list(method = "BFGS")))
@@ -550,7 +601,7 @@ qqnorm(residuals(mod.AR1))
 qqline(residuals(mod.AR1))
 shapiro.test(residuals(mod.AR1))
 
-# Try polynomial term for day
+# Try polynomial term for day - orthogonal polynomial (not raw polynomial coefficients)
 mod.AR1_poly <- glmmTMB(weight ~ trt * poly(day, 2) + ar1(day + 0|plant),
                 dispformula = ~ 0, REML = TRUE, data = dat) 
 qqnorm(residuals(mod.AR1_poly))

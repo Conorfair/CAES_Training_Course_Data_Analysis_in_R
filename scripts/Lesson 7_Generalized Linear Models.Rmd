@@ -1,7 +1,7 @@
 ---
 title: "Generalized Linear Models"
 author: "Conor Fair"
-date: "2025-10-7"
+date: "2025-10-07"
 output:
   html_document:                           # Options for HTML output
     theme: flatly                           # Sets a Bootstrap theme for HTML
@@ -25,7 +25,7 @@ geometry: margin=1in                         # Sets page margins for PDF
 editor_options: 
   chunk_output_type: console                 # Show code chunk output in the console by default
   markdown: 
-    wrap: 72                                # Wrap lines at 72 characters for readability in Markdown view---
+    wrap: 72                                # Wrap lines at 72 characters for readability in Markdown view
 ---
 
 ```{r setup, include=FALSE}
@@ -34,11 +34,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, include=FALSE}
 #Necessary Libraries
-pacman::p_load(agridat, tidyverse, dplyr, here, car, # data import and handling
+pacman::p_load(agridat, tidyverse, here, car, # data import and handling
                conflicted, # handling function conflicts
                emmeans, multcomp, multcompView, # adjusted mean comparisons
-               ggplot2, ggpp, desplot, gridExtra, ggfortify, viridis, # plots
-               performance) #Others
+               ggpp, desplot, gridExtra, ggfortify, viridis, # plots
+               performance, DHARMa) #Others
 
 # conflicts: identical function names from different packages
 conflict_prefer("filter", "dplyr")
@@ -51,7 +51,7 @@ options(scipen=999)
 Generalized linear models (GLMs) are a class of linear-based regression models developed to handle varying types of error distributions (other than normally (Gaussian) distributed). Common examples include responses that are binary (e.g., 0 and 1), or count data that are discrete values (integers) and never negative. While data transformations prior to fitting a model can be done, it may be difficult to properly meet model assumptions. We will show examples of how to perform data transformations as well as appropriate GLMs based on data properties.
 
 ## One-Way ANOVA with non-normal data
-We will first analyze data that came from a trail of different insecticide applications and the resultant number of insects. The four sprays A, B, C, and F are the focus of this analysis and are filtered from the original dataset. We will approach this analysis just as we had done with the ANOVA lecture.
+We will first analyze data that came from a trial of different insecticide applications and the resultant number of insects. The four sprays A, B, C, and F are the focus of this analysis and are filtered from the original dataset. We will approach this analysis just as we did in the previous ANOVA lecture.
 
 ```{r}
 Count_Data <- read_csv(here("data", "Count_Model.csv"))
@@ -156,15 +156,15 @@ summary(glm1)
 ```
 
 ### Assumptions
-When fitting a generalized linear model we assume a different distribution of the residuals other than normally distributed. We don't need to bother with the shapiro or levene test. We do need to review the autoplot functions to ensure the independence of the residuals - look for trend in residuals.
+Unlike linear models, GLMs do not assume normally distributed residuals. The assessment of residuals is used to check model fit and independence, rather than normality, so the ‘better’ fit here refers to appropriately modeling the variance structure of the count data.
 
 ```{r}
 autoplot(lm1) 
 autoplot(lm2) 
-autoplot(glm1) 
+autoplot(glm1)
 ```
 
-The results from the assessment of the residuals for the generalized linear model are better than the one-way ANOVA and the log-transformed count data. This is a better approach to model this type of data.
+The results from the assessment of the residuals for the linear model indicates some non-constant variance in the residuals and minor deviation in the QQ-plot. The log-transformed count model didn't seem to help much either. The generalized linear model seemed to handle things well. This is a better approach to model this type of data.
 
 ### Compare marginal means for different models
 
@@ -214,7 +214,7 @@ emmeans3 <- emmeans3 %>%
   as_tibble()
 
 Plot_lm1 <- ggplot() +
-  geom_point(data = Count_Data, aes(y = count, x = spray), position = position_jitter(width = 0.1)) + # dots representing the raw data
+  geom_point(data = Count_Data, aes(y = count, x = spray), position = position_jitter(width = 0.1), alpha = 0.5) + # dots representing the raw data
   geom_boxplot(data = Count_Data, aes(y = count, x = spray), position = position_nudge(x = -0.25), width = 0.25, outlier.shape = NA) + # boxplot
   geom_point(data = emmeans1, aes(y = emmean, x = spray), position = position_nudge(x = 0.15), size = 2, color = "red") + # red dots representing the adjusted means
   geom_errorbar(data = emmeans1, aes(ymin = lower.CL, ymax = upper.CL, x = spray), position = position_nudge(x = 0.15), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
@@ -224,7 +224,7 @@ Plot_lm1 <- ggplot() +
 Plot_lm1
 
 Plot_glm1 <- ggplot() +
-  geom_point(data = Count_Data, aes(y = count, x = spray), position = position_jitter(width = 0.1)) + # dots representing the raw data
+  geom_point(data = Count_Data, aes(y = count, x = spray), position = position_jitter(width = 0.1), alpha = 0.5) + # dots representing the raw data
   geom_boxplot(data = Count_Data, aes(y = count, x = spray), position = position_nudge(x = -0.25), width = 0.25, outlier.shape = NA) + # boxplot
   geom_point(data = emmeans3, aes(y = rate, x = spray), position = position_nudge(x = 0.15), size = 2, color = "red") + # red dots representing the adjusted means
   geom_errorbar(data = emmeans3, aes(ymin = asymp.LCL, ymax = asymp.UCL, x = spray), position = position_nudge(x = 0.15), color = "red", width = 0.1) + # red error bars representing the confidence limits of the adjusted means
@@ -240,7 +240,7 @@ We can see that the C spray treatment had the lowest number of insects compared 
 
 ## Overdispersion
 
-The Poisson distribution is a unique distribution that is often used to model count data. There are specific conditions that describe the Poisson distribution that don't always hold for count data - the assumption is that the mean and variance are equal. When the variance of the data is larger than the mean of the data the data are said to follow a negative binomial distribution. We have to determine if the variance is greater than the mean enough to determine if we should fit the model using a Poisson distribution or a negative binomial distribution. We will review the steps to assess these characteristics of count data.
+The Poisson distribution is a unique distribution that is often used to model count data. There are specific conditions that describe the Poisson distribution that don't always hold for count data - the assumption is that the mean and variance are equal. When the variance of the data is larger than the mean of the data the data may follow a negative binomial distribution. We have to determine if the variance is greater than the mean enough to determine if we should fit the model using a Poisson distribution or a negative binomial distribution. We will review the steps to assess these characteristics of count data.
 
 The general approach is to fit a model with the Poisson distribution and check for overdispersion and then fit the Negative Binomial distribution for models with overdispersion.
 
@@ -293,10 +293,8 @@ Anova(mod2, type = 3, test.statistic = "F")
 Other methods to compare residuals for poisson and negative binomial models include functions from the DHARMa package.
 
 ```{r}
-#install.packages("DHARMa")
-library(DHARMa)
-simulateResiduals(mod1,plot = T)
-simulateResiduals(mod2,plot = T)
+simulateResiduals(mod1, n = 1000, plot = T)
+simulateResiduals(mod2, n = 1000, plot = T)
 
 autoplot(mod2) 
 ```
@@ -347,7 +345,7 @@ There are instances where count data will have excessive zeros where the poisson
 For data that follow a binomial error distribution often have a binomial or dichotomous response. The example dataset follows the study of 800 observations among two pepper fields documenting the presence or absence of Phytophera disease. The response variable is the presence or absence of the disease, and the independent variables are field and soil moisture percent we will be reviewing to determine if they impact the probability of the disease being observed.
 
 ```{r}
-data <- read_csv(here("data","Logistic_Regressionl.csv"))
+data <- read_csv(here("data","Logistic_Regression.csv"))
 
 head(data)
 data$field <- as.factor(data$field)
@@ -396,7 +394,6 @@ The non-significant result suggests that the presence of the disease is not diff
 ### Visualize the Results
 
 ```{r}
-library(ggpp)
 ggplot(data, aes(x = field, y = disease_num)) +
   geom_jitter(height = 0.01) +
   geom_errorbar(data = means,
@@ -460,7 +457,6 @@ We are going to revisit the mead.lamb (Mead et al. 2002) data to use as practice
 
 
 ```{r}
-library(agridat)
 data(mead.lamb)
 dat <- mead.lamb
 

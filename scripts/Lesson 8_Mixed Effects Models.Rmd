@@ -1,7 +1,7 @@
 ---
 title: "Mixed Effects Models"
 author: "Conor Fair"
-date: "2025-10-8"
+date: "2025-10-08"
 output:
   html_document:                           # Options for HTML output
     theme: flatly                           # Sets a Bootstrap theme for HTML
@@ -25,7 +25,7 @@ geometry: margin=1in                         # Sets page margins for PDF
 editor_options: 
   chunk_output_type: console                 # Show code chunk output in the console by default
   markdown: 
-    wrap: 72                                # Wrap lines at 72 characters for readability in Markdown view---
+    wrap: 72                                # Wrap lines at 72 characters for readability in Markdown view
 ---
 
 ```{r setup, include=FALSE}
@@ -34,10 +34,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, include=FALSE}
 #Necessary Libraries
-pacman::p_load(agridat, tidyverse, dplyr, here, # data import and handling
+pacman::p_load(agridat, tidyverse, here, # data import and handling
                conflicted, # handling function conflicts
                emmeans, multcomp, multcompView, # adjusted mean comparisons
-               lme4, #liner modeling
+               lmerTest, #linear modeling
                ggplot2, ggpp, desplot, gridExtra, ggfortify, # plots
                forcats, stringr, performance, DHARMa) # others
 
@@ -53,7 +53,7 @@ The motivation for using mixed models stems from the intention to incorporate ef
 
 ## Terminology
 
-Mixed models are known by a variety of names that is usually sub-field specific. The most common terms you may come across are:
+Mixed models are known by a variety of names that are usually sub-field specific. The most common terms you may come across are:
 * Variance components
 * Random intercepts and slopes
 * Random effects
@@ -65,7 +65,6 @@ Mixed models are known by a variety of names that is usually sub-field specific.
 * Mixed effects models
 
 We will be using mixed effects models, which generally refer to the inclusion of both fixed and random effects. This terminology does not suggest specific structure (e.g., hierarchical, or multilevel). The term fixed effects refers to the non-random terms included in the model, which includes the variables of experimental interest. Random effects are often considered to be different grouping factors that may help define clustering of observational units.
-
 
 ## Random Intercept Model
 
@@ -84,7 +83,6 @@ data <- read_csv(here("data","Random_Intercept_Model.csv"))
 str(data)
 ```
 
-
 ### Exploring the Data
 
 ```{r}
@@ -93,7 +91,7 @@ ggplot(data, aes(x = spray, y = count)) +
   geom_jitter(height = 0, width = 0.1)
 ```
 
-Tested to see if there is a relationship between the different sprays used and the count of insects observed. We can add blocks to the data by constructing a vector of factor variables. This code builds 12 different blocks in the data set with each block being comprised of 4 replicates for a total of 48 replicates or samples. Each boxplot is just a point and line.
+Tested to see if there is a relationship between the different sprays used and the count of insects observed. We can add blocks to the data by constructing a vector of factor variables. This code builds 12 different blocks in the data set each containting 4 replicates for a total of 48 replicates or samples. Each boxplot is just a point and line.
 
 ```{r}
 data$block <- as.factor(rep(c(1:12), 4))
@@ -111,24 +109,24 @@ The initial model considers the variation in count among the different sprays an
 
 ```{r}
 # Running the Model ANOVA - ignoring the block design
-Mod <- glm(count ~ spray, data = data)
+Mod <- lm(count ~ spray, data = data)
 car::Anova(Mod, test.statistic = "F")
 ```
 
 We can account for the blocking factor by adding the block variable as a fixed effect.
 
 ```{r}
-Mod2 <- glm(count ~ spray + block, data = data)
+Mod2 <- lm(count ~ spray + block, data = data)
 car::Anova(Mod2, test.statistic = "F")
 ```
 
 When we aren't necessarily interested in testing the significance, or estimating parameters, for the block effect - we just want to account for it. Therefore, block may be more appropriately fitted as a random effect. This is called a linear mixed effects model with a block as a random effect (random intercept). The random intercept is specified using the (1|intercept) notation. This notation is used for both glmmTMB and lmer functions.
 
 ```{r}
-Mod3 <- lmer(count ~ spray + (1|block), data = data)
+Mod3 <- lmerTest::lmer(count ~ spray + (1|block), data = data)
 # Mod3 <- glmmTMB(count ~ spray + (1|block), data = data)
 # anova(Mod) - no anova() method for glmmTMB
-car::Anova(Mod3, test.statistic = "F")
+anova(Mod3, type = "II")
 summary(Mod3)
 ```
 
@@ -147,7 +145,7 @@ simulateResiduals(Mod3, plot = T)
 
 qqnorm(resid(Mod2))
 qqline(resid(Mod2))
-lattice::qqmath(Mod3) # doesn't work with glm or lm models
+lattice::qqmath(Mod3) # works only for mixed models
 ```
 
 ### Mean Comparisons
@@ -156,11 +154,11 @@ Finally we can compare the estimated marginal means.
 
 ```{r}
 emmeans2 <- Mod2 %>%
-  emmeans(specs = "spray", type = "response") %>%
+  emmeans(specs = "spray") %>%
   cld(Letters = letters)
 emmeans2
 emmeans3 <- Mod3 %>%
-  emmeans(specs = "spray", type = "response") %>%
+  emmeans(specs = "spray") %>%
   cld(Letters = letters)
 emmeans3
 ```
@@ -207,7 +205,7 @@ From Gelman 2005:
 2) Effects are fixed if they are interesting in themselves or random if there is interest in the underlying population.
 3) When a sample exhausts the population, the corresponding variable is fixed; when the sample is a small (i.e., negligible) part of the population the corresponding variable is random.
 4) If an effect is assumed to be a realized value or a random variable, it is called a random effect.
-5) Fixed effects are estimated using least squares (or, more generally, maximum likelihood) and random effects are estimated with shrinkage (e.g., linear unbiased prediction).
+5) Fixed effects are estimated using least squares (or, more generally, maximum likelihood) and random effects are estimated with shrinkage (e.g., linear unbiased prediction (BLUP)).
 
 "...one modeler's random effect is another modeler's fixed effect" (Schabenberger and Pierce 2001).
 
@@ -218,8 +216,8 @@ Another major differences for mixed-effect models is that we can calculate the v
 We know where the R-squared value is reported with a fixed effects model. There are a few more steps to extract the R-squared value for a mixed effects model or when we use the glmmTMB function. The fixed effects model gives us the R-squared and Adjusted R-squared value. The mixed effects model gives us the Conditional R-squared (fixed plus random effects) and Marginal R-squared (fixed effects). This gives us an assessment of how much variance is attributed to the random effect compared to the whole model.
 
 ```{r}
-r2(Mod2)
-r2(Mod3)
+r2(Mod2, conditional = TRUE)
+r2(Mod3, conditional = TRUE)
 ```
 
 Mixed effects models become further complicated when we move beyond the simple random intercept model. 
@@ -303,7 +301,7 @@ withinG_RCBD_Plot_tukey <- ggplot() +
   geom_point(data = dat, aes(y = yield, x = N, color = N)) + # dots representing the raw data
   geom_point(data = withinG_mean_comparisons_tukey_re, aes(y = emmean, x = N), color = "red", position = position_nudge(x = 0.1)) + # red dots representing the adjusted means
   geom_errorbar(data = withinG_mean_comparisons_tukey_re, aes(ymin = lower.CL, ymax = upper.CL, x = N), color = "red", width = 0.1, position = position_nudge(x = 0.1)) + # red error bars representing the confidence limits of the adjusted means
-  geom_text(data = withinG_mean_comparisons_tukey_re, aes(y = emmean, x = N, label = str_trim(.group)), color =" red", position = position_nudge(x = 0.2), hjust = 0) + # red letters 
+  geom_text(data = withinG_mean_comparisons_tukey_re, aes(y = emmean, x = N, label = str_trim(.group)), color ="red", position = position_nudge(x = 0.2), hjust = 0) + # red letters 
   scale_y_continuous(name = "Yield", limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
   scale_x_discrete(name = NULL) +
   theme_classic() + # clearer plot format 
@@ -312,7 +310,7 @@ labs(caption = str_wrap("Black dots represent raw data. Red dots and error bars 
 withinG_RCBD_Plot_tukey
 ```
 
-Mixed effects models become even further complicated with you consider random slopes in addition to random intercepts. The model specification details found at this [link](https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#model-specification) can help you draft the specific syntax to represent the random effects of your model.
+Mixed effects models become even further complicated when you consider random slopes in addition to random intercepts. The model specification details found at this [link](https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#model-specification) can help you draft the specific syntax to represent the random effects of your model.
 
 ## Random Slope and Intercept
 
@@ -325,8 +323,9 @@ These data come from the rikz dataset of 45 intertidal sites across 9 beaches in
 ```{r}
 data <- read_csv(here("data","Random_Slope_and_Intercept Model_Example.csv"))
 str(data)
-data <- mutate(data, Beach = as.factor(Beach), 
-               Exposure = as.factor(Exposure))
+data <- data %>%
+  mutate(Beach = as.factor(Beach), 
+         Exposure = as.factor(Exposure))
 ```
 
 ### Exploring the Data
@@ -348,56 +347,70 @@ ggplot(data, aes(y = Richness, x = NAP)) +
 With especially complicated models it is common to have convergence issues. The following [link](https://rstudio-pubs-static.s3.amazonaws.com/33653_57fc7b8e5d484c909b615d8633c01d51.html) can help troubleshoot issues with lmer type models based on the warning/error messages printed after fitting a model.
 
 ```{r}
-mod_rint <- lmer(Richness ~ NAP + (1|Beach), data, REML = T)
+# Step 1: Determine random effects structure (REML = TRUE)
+# Random intercept only
+mod_rint <- lmerTest::lmer(Richness ~ NAP + (1|Beach), data = data, REML = TRUE)
 
-mod_rsint <- lmer(Richness ~ NAP + (1 + NAP|Beach), data, REML = T)
-# Restarting from previous fit and increased max number of iterations
-ss <- getME(mod_rsint, c("theta", "fixef"))
-mod_rsint2 <- update(mod_rsint, start = ss, control = lmerControl(optCtrl = list(maxfun = 2e4)), REML = T)
-summary(mod_rsint2)
-# Compare random effects structure to see which fits the data best
-AICcmodavg::aictab(
-  cand.set = list(mod_rint, mod_rsint2), 
-  modnames = c("Intercept", "Slope+Intercept"),
-  second.ord = FALSE) # get AIC instead of AICc
+# Random intercept + slope
+mod_rsint <- lmerTest::lmer(Richness ~ NAP + (1 + NAP|Beach), data = data, REML = TRUE)
+mod_rsint <- update(mod_rsint, control = lmerControl(optimizer = "bobyqa", 
+                                           optCtrl = list(maxfun = 2e4)))
 
-plot(residuals(mod_rint) ~ fitted(mod_rint))
+# Check for singularity
+isSingular(mod_rsint)          # TRUE → remove slope if singular
+VarCorr(mod_rsint)             # Inspect random effect variances
+
+# Given high correlation in random slope
+mod_rsint_uncorr <- lmerTest::lmer(Richness ~ NAP + (1 | Beach) + (0 + NAP | Beach), data = data)
+VarCorr(mod_rsint_uncorr)
+
+
+# Compare random effects
+anova(mod_rint, mod_rsint, mod_rsint_uncorr)     # LRT for random effects
+
+# Step 2: Determine fixed effects structure (REML = FALSE)
+# Use the chosen random effects structure
+mod_final <- lmerTest::lmer(Richness ~ NAP * Exposure + (1|Beach), data = data, REML = FALSE)
+mod_final <- update(mod_final, control = lmerControl(optimizer = "bobyqa", 
+                                           optCtrl = list(maxfun = 2e4)))
+
+# Check for singularity
+isSingular(mod_final)          # TRUE → remove slope if singular
+VarCorr(mod_final)             # Inspect random effect variances
+
+anova(mod_final)               # Type III F-tests
+summary(mod_final)             # Fixed effect estimates
+
+# Step 3: Residual diagnostics
+plot(residuals(mod_final) ~ fitted(mod_final))
 abline(h = 0)
-plot(residuals(mod_rsint2) ~ fitted(mod_rsint2))
-abline(h = 0)
 
-# Residual plot looks problematic - check omitted variable bias and include Exposure in model
+# If residuals indicate non-normality or heteroscedasticity:
+# Step 4: Fit GLMM for count data (Poisson)
+mod_glm <- glmer(Richness ~ NAP * Exposure + (1|Beach),
+                 data = data, family = poisson(link = "log"))
 
-mod_rsint1 <- lmer(Richness ~ NAP + (1 + NAP|Beach), data, REML = F)
-mod_rsint2 <- lmer(Richness ~ NAP * Exposure + (1 + NAP|Beach), data, REML = F)
-anova(mod_rsint1, mod_rsint2)
+# Simulated residuals diagnostics
+sims <- simulateResiduals(mod_glm, n = 1000)
+plot(sims, quantreg = TRUE)
 
-# Interaction fixed effect has better model fitness - need to use REML=F to test fitness of fixed effects 
+# Step 5: Report final model
+summary(mod_glm)
+car::Anova(mod_glm, type = 2)  # Wald Chi-square tests
 
-plot(residuals(mod_rsint2) ~ fitted(mod_rsint2))
-abline(h = 0)
+mod_poisson_slope <- glmer(Richness ~ NAP * Exposure + (1 + NAP|Beach),
+                           data = data, family = poisson(link = "log"))
 
-# Didn't resolve heteroscedasticity issue with residuals - try a count model
+anova(mod_glm, mod_poisson_slope, test="Chisq")
+# Non-significant result suggests that a random slope isn't necessary
 
-mod_glm_rsint <- glmer(Richness ~ NAP * Exposure + (1 + NAP|Beach), data, family = poisson(link = "log"))
+mod_glm2 <- glmer(Richness ~ NAP + Exposure + (1|Beach),
+                  data = data, family = poisson(link = "log"))
 
-plot(residuals(mod_glm_rsint) ~ fitted(mod_glm_rsint))
-abline(h = 0)
-
-sims=simulateResiduals(mod_glm_rsint) 
-plot(sims, quantreg = T)
-
-check_overdispersion(mod_glm_rsint) # No need for negative binomial distribution
-
-# Selected model steps
-# 1) determine random effects structure using REML=T
-# 2) determine fixed effects structure using REML=F
-# 3) determine appropriate distribution normal, transformation, count, etc.
-# 4) move onto assessing Anova results
-
-car::Anova(mod_glm_rsint, type = 3) # cannot call test.statistic = "F" for glmerMod object
-car::Anova(mod_glm_rsint, type = 2) 
-summary(mod_glm_rsint)
+AIC(mod_glm,mod_glm2)
+# No difference between model with or without interaction
+# If the interaction term was a specific hypothesis, then you should keep it
+# If you would rather keep a more parsimonious model, then you can drop it
 ```
 
 ### Mean Comparisons
@@ -405,14 +418,14 @@ summary(mod_glm_rsint)
 Now that the best fitting model has been chosen, we can move forward with interpreting the results.
 
 ```{r}
-Exposure_means <- mod_glm_rsint %>%
-  emmeans(~ Exposure) %>%
-  cld(Letters = letters, type = "response")
+Exposure_means <- mod_glm %>%
+  emmeans(~ Exposure, type = "response") %>%
+  cld(Letters = letters)
 Exposure_means
 
-trends <- mod_glm_rsint %>%
-  emtrends(pairwise ~ Exposure, var = "NAP") %>%
-    cld(Letters = letters, type = "response")
+trends <- mod_glm %>%
+  emtrends(pairwise ~ Exposure, var = "NAP", type = "response") %>%
+    cld(Letters = letters)
 trends
 ```
 
@@ -429,14 +442,14 @@ new.x <- expand.grid(NAP = seq(-1.336, 2.255, length.out = 100),
                    Site = levels(data$Site))
 
 
-new.x$Richness <- predict(mod_glm_rsint, new.x, re.form = NA, type = "response")
+new.x$Richness <- predict(mod_glm, new.x, re.form = NA, type = "response")
 
-# There is no method using the predict function to derive standard errors and thus no confidence intervals using the predict function.
-# Some complex matrix multiplication to produce 95% confidence intervals
+# The `predict()` function doesn't automatically produce standard errors for GLMMs, so we compute approximate confidence intervals manually using the models variance covariance matrix.
+# This approach is quite technical, but it is primarily shown here for transparency
 
-mm <- model.matrix(terms(mod_glm_rsint), new.x)
-pvar1 <- diag(mm %*% tcrossprod(vcov(mod_glm_rsint), mm))
-tvar1 <- pvar1 + VarCorr(mod_glm_rsint)$Beach[1]
+mm <- model.matrix(terms(mod_glm), new.x)
+pvar1 <- diag(mm %*% tcrossprod(vcov(mod_glm), mm))
+tvar1 <- pvar1 + VarCorr(mod_glm)$Beach[1]
 cmult <- 2
 
 new.x <- data.frame(new.x
@@ -452,7 +465,6 @@ FE_Plot <- ggplot(data, aes(x = NAP, y = Richness, color = Exposure)) +
   geom_line(data = new.x, aes(x = NAP, y = Richness - plo, color = Exposure), lty = 2) +
   geom_line(data = new.x, aes(x = NAP, y = Richness + phi, color = Exposure), lty = 2) +
   scale_color_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
-  scale_fill_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
   theme_classic()
 FE_Plot
 # CI based on FE and RE
@@ -462,7 +474,6 @@ FE_RE_Plot <- ggplot(data, aes(x = NAP, y = Richness, color = Exposure)) +
   geom_line(data = new.x, aes(x = NAP, y = Richness - tlo, color = Exposure), lty = 2) +
   geom_line(data = new.x, aes(x = NAP, y = Richness + thi, color = Exposure), lty = 2) +
   scale_color_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
-  scale_fill_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
   theme_classic()
 FE_RE_Plot
 Exposure_means <- Exposure_means %>%
@@ -480,10 +491,10 @@ Plot_Exposure
 
 Composite_Plot <- gridExtra::grid.arrange(FE_Plot, FE_RE_Plot, Plot_Exposure, nrow = 1)
 
-ggsave("GLMER_Plot.tiff", plot = Composite_Plot, width = 50, height = 20, units = "cm", dpi = 300)
+ggsave(here("output","GLMER_Plot.tiff"), plot = Composite_Plot, width = 50, height = 20, units = "cm", dpi = 300)
 ```
 
-### Aprroach using bootMer
+### Approach using bootMer
 
 ```{r}
 new_x <- expand.grid(NAP = seq(-1.336, 2.255, length.out = 100),
@@ -492,7 +503,7 @@ new_x <- expand.grid(NAP = seq(-1.336, 2.255, length.out = 100),
                    Site = levels(data$Site))
 
 mySumm<-function(.){
-  predict(.,newdata = new.x, re.form = NA)
+  predict(.,newdata = new_x, re.form = NA)
 }
 sumBoot <- function(merBoot) {
   return(
@@ -503,7 +514,7 @@ sumBoot <- function(merBoot) {
   )
 }
 
-boot1 <- lme4::bootMer(mod_glm_rsint, mySumm, nsim = 250, use.u = FALSE, type = "parametric")
+boot1 <- lme4::bootMer(mod_glm, mySumm, nsim = 250, use.u = FALSE, type = "parametric")
 PI.boot1 <- sumBoot(boot1)
 head(PI.boot1)
 
@@ -520,11 +531,10 @@ FE_RE_Plot <- ggplot(data, aes(x = NAP, y = Richness, color = Exposure)) +
   geom_line(data = new_data, aes(x = NAP, y = Richness - lwr, color = Exposure), lty = 2) +
   geom_line(data = new_data, aes(x = NAP, y = Richness + upr, color = Exposure), lty = 2) +
   scale_color_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
-  scale_fill_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
   theme_classic()
 FE_RE_Plot
 
-boot2 <- lme4::bootMer(mod_glm_rsint, mySumm, nsim = 250, use.u = TRUE, type = "parametric")
+boot2 <- lme4::bootMer(mod_glm, mySumm, nsim = 250, use.u = TRUE, type = "parametric")
 PI.boot2 <- sumBoot(boot2)
 
 new_data_2 <- data.frame(new_x, PI.boot2) %>%
@@ -540,10 +550,11 @@ FE_RE_Plot_2 <- ggplot(data, aes(x = NAP, y = Richness, color = Exposure)) +
   geom_line(data = new_data_2, aes(x = NAP, y = Richness - lwr, color = Exposure), lty = 2) +
   geom_line(data = new_data_2, aes(x = NAP, y = Richness + upr, color = Exposure), lty = 2) +
   scale_color_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
-  scale_fill_manual(values = c(`8` = "blue", `10` = "red", `11` = "green")) +
   theme_classic()
 FE_RE_Plot_2
 ```
+
+Mixed effects models provide a flexible framework to account for non-independence and hierarchical data structures. Random intercepts account for baseline differences among groups, while random slopes allow relationships between predictors and responses to vary across groups. When assumptions of normality are violated or responses are counts, GLMMs (e.g., Poisson or binomial) extend the same logic to non-Gaussian data.
 
 ## Practice Problem Repeated Measures
 
@@ -564,7 +575,7 @@ ggplot(data, aes(y = Reaction, x = Days)) +
     geom_point() + 
     geom_line()
 
-mod_intercept <- lmer(Reaction ~ Days + (1|Subject), data = data)
+mod_intercept <- lmerTest::lmer(Reaction ~ Days + (1|Subject), data = data)
 
 # Review model assumptions
 plot(resid(mod_intercept) ~ fitted(mod_intercept)) # small hint of curved relationship
@@ -574,7 +585,7 @@ abline(h = 0)
 summary(mod_intercept)$varcor
 ranef(mod_intercept)$Subject # unique baseline for each subject
 
-car::Anova(mod_intercept, test.statistic = "F") # Days is a continuous variable - summary table gives us the slope of the line
+anova(mod_intercept) # Days is a continuous variable - summary table gives us the slope of the line
 summary(mod_intercept)
 ```
 
@@ -582,7 +593,7 @@ Each subject has their own baseline for reaction time and the subsequent measure
 
 ```{r}
 data <- data %>% 
-  mutate(yhat = predict(mod_intercept, re.form = ~ (1|Subject))) # predict function calculated predictions based on model estimates and the re.form calculates the random intercepts
+  mutate(yhat = predict(mod_intercept, re.form = ~(1|Subject))) # predict function calculated predictions based on model estimates and the re.form calculates the random intercepts
 ggplot(data, aes(y = Reaction, x = Days)) +
     facet_wrap(~ Subject, ncol = 6) + 
     geom_point() + 
@@ -593,7 +604,7 @@ ggplot(data, aes(y = Reaction, x = Days)) +
 Some subjects have less deviation from their predicted lines, but this assumes each subject has the same slope. We can fit a model that allows for each subject to have their own slope as well as their own y-intercept. The random slope will be calculated as a fixed effect of slope plus a random offset from that.
 
 ```{r}
-mod_SI <- lmer(Reaction ~ Days + (1 + Days|Subject), data = data)
+mod_SI <- lmerTest::lmer(Reaction ~ Days + (1 + Days|Subject), data = data)
 
 # Review model assumptions
 plot(resid(mod_SI) ~ fitted(mod_SI)) # curved relationship is no longer - some extreme observations??
@@ -610,7 +621,7 @@ Review figure of each subject with their unique slope and intercept
 
 ```{r}
 data <- data %>% 
-  mutate(yhat = predict(mod_SI, re.form = ~ (1 + Days|Subject)))
+  mutate(yhat = predict(mod_SI, re.form = ~(1 + Days|Subject)))
 ggplot(data, aes(y = Reaction, x = Days)) +
     facet_wrap(~ Subject, ncol = 6) + 
     geom_point() + 
@@ -630,19 +641,18 @@ We can review the results from the better fitting model with first the populatio
 
 ```{r}
 data <- data %>% 
-  mutate(yhat = predict(mod_SI, re.form = ~ 0))
+  mutate(yhat = predict(mod_SI, re.form = ~0))
 ggplot(data, aes(x = Days, y = yhat)) +
   geom_point(aes(x = Days, y = Reaction)) +
   geom_line(color = 'red') + ylab('Reaction') +
   ggtitle('Population Estimated Regression Curve') +
   scale_x_continuous(breaks = seq(0, 9, by = 2))
 
-
 data <- data %>% 
-  mutate(yhat.ind = predict(mod_SI, re.form = ~ (1 + Days|Subject)))
+  mutate(yhat.ind = predict(mod_SI, re.form = ~(1 + Days|Subject)))
 ggplot(data, aes(x = Days)) +
   geom_line(aes(y = yhat), linewidth = 3) + 
-  geom_line(aes(y = yhat.ind, group = Subject), color. ='red') +
+  geom_line(aes(y = yhat.ind, group = Subject), color ='red') +
   scale_x_continuous(breaks = seq(0, 9, by = 2)) +
   ylab('Reaction') + ggtitle('Person-to-Person Variation')
 ```
@@ -716,11 +726,11 @@ ConfData <- data.frame(Days = 0:9)   # What x-values I care about - much more co
 
 # Get our best guess as to the relationship between day and reaction time
 ConfData <- ConfData %>%
-  mutate( Estimate = predict(mod_SI, newdata = ConfData, re.form = ~ 0))
+  mutate( Estimate = predict(mod_SI, newdata = ConfData, re.form = ~0))
 
 # A function to generate yhat from a model
 myStats <- function(model.star){
-  out <- predict(model.star, newdata = ConfData, re.form = ~ 0)
+  out <- predict(model.star, newdata = ConfData, re.form = ~0)
   return(out)
 }
 
@@ -739,8 +749,8 @@ ConfData <- cbind(ConfData, CI)
 
 ConfData %>%
   ggplot(aes(x = Days)) +
-  geom_line(aes(y = Estimate), color = 'red') +
-  geom_ribbon(aes(ymin = lwr, ymax = upr), fill = 'salmon', alpha = 0.2)
+  geom_line(aes(y = Estimate, group = 1), color = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr, group = 1), fill = 'salmon', alpha = 0.2)
 ```
 
 The prediction interval is the range of observed values. We can visualize the prediction interval in relation to the confidence interval. The simulate function creates the bootstrap dataset and doesn't send it for more processing. It returns a vector of response values that are appropriately organized to be appended to the original dataset.
