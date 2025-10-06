@@ -451,6 +451,39 @@ mod.UN %>% broom.mixed::tidy(effects = "ran_pars", scales = "vcov")
 In order to select the best model here, we can simply compare their AIC values, since all models are identical regarding their fixed effects. The smaller the value of AIC, the better the fit.
 
 ```{r}
+cor.AR1  <- cov2cor(VarCorr(mod.AR1)$cond$plot)
+cor.hCS  <- cov2cor(VarCorr(mod.hCS)$cond$plot)
+cor.Toep <- cov2cor(VarCorr(mod.Toep)$cond$plot)
+cor.UN <- cov2cor(VarCorr(mod.UN)$cond$plot)
+
+melt_cor <- function(cor_mat, model_name) {
+  melt(cor_mat, varnames = c("Week1", "Week2"), value.name = "Correlation") %>%
+    mutate(Model = model_name)
+}
+
+df_cor <- bind_rows(
+  melt_cor(cor.AR1,  "AR(1)"),
+  melt_cor(cor.hCS,  "Heterogeneous CS"),
+  melt_cor(cor.Toep, "Toeplitz"),
+  melt_cor(cor.UN,   "UN"))
+
+
+ggplot(df_cor, aes(Week1, Week2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(
+    low = "blue", mid = "white", high = "red", midpoint = 0,
+    limits = c(-1, 1)
+  ) +
+  facet_wrap(~ Model, nrow = 1) +
+  coord_equal() +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Random-effect correlation structure across models",
+    fill = "r"
+  )
+
+
 AICcmodavg::aictab(
   cand.set = list(mod.iid, mod.hCS, mod.AR1, mod.Toep, mod.UN), 
   modnames = c("iid", "hCS", "AR1", "Toeplitz", "UN"),
